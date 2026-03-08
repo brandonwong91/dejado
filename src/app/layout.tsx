@@ -16,8 +16,11 @@ const META_THEME_COLORS = {
 };
 
 export const metadata: Metadata = {
-  title: 'Next Shadcn',
-  description: 'Basic dashboard with Next.js and Shadcn'
+  title: 'Dejado Dashboard',
+  description: 'Manage your workspaces and projects with Dejado.',
+  icons: {
+    icon: '/dejado-icon.svg'
+  }
 };
 
 export const viewport: Viewport = {

@@ -11,7 +11,7 @@ import { Suspense } from 'react';
 import { productInfoContent } from '@/config/infoconfig';
 
 export const metadata = {
-  title: 'Dashboard: Products'
+  title: 'Products | Dejado'
 };
 
 type pageProps = {

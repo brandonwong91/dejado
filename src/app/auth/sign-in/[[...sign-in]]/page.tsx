@@ -2,8 +2,8 @@ import { Metadata } from 'next';
 import SignInViewPage from '@/features/auth/components/sign-in-view';
 
 export const metadata: Metadata = {
-  title: 'Authentication | Sign In',
-  description: 'Sign In page for authentication.'
+  title: 'Sign In | Dejado',
+  description: 'Sign in to your Dejado account.'
 };
 
 export default async function Page() {

@@ -3,16 +3,15 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 
 export const metadata: Metadata = {
-  title: 'Dejado Dashboard',
-  description: 'Manage your workspaces and projects with Dejado.'
+  title: 'Payments | Dejado',
+  description: 'Manage your payments and transactions.'
 };
 
-export default async function DashboardLayout({
+export default async function PaymentsLayout({
   children
 }: {
   children: React.ReactNode;
 }) {
-  // Persisting the sidebar state in the cookie.
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get('sidebar_state')?.value === 'true';
 

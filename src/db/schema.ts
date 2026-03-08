@@ -9,3 +9,17 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
+
+export const payments = pgTable('payments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(), // Using Clerk's user ID for simplicity
+  name: text('name').notNull(),
+  dueDate: timestamp('due_date').notNull(),
+  currency: text('currency').notNull().default('USD'),
+  amount: text('amount').notNull(), // Using text to avoid precision issues with float in simple demo
+  tag: text('tag'),
+  frequency: text('frequency').notNull(), // e.g. "30" for 30 days
+  isPaid: text('is_paid').default('false').notNull(), // boolean-like text
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});

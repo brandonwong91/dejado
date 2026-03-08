@@ -26,7 +26,8 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarRail
+  SidebarRail,
+  useSidebar
 } from '@/components/ui/sidebar';
 import { UserAvatarProfile } from '@/components/user-avatar-profile';
 import { navItems } from '@/config/nav-config';
@@ -53,6 +54,7 @@ export default function AppSidebar() {
   const { isOpen } = useMediaQuery();
   const { user } = useUser();
   const { organization } = useOrganization();
+  const { state } = useSidebar();
   const router = useRouter();
   const filteredItems = useFilteredNavItems(navItems);
 
@@ -63,9 +65,37 @@ export default function AppSidebar() {
   return (
     <Sidebar collapsible='icon'>
       <SidebarHeader>
-        <OrgSwitcher />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size='lg' asChild>
+              <Link href='/dashboard/overview'>
+                <div className='flex items-center justify-center p-1'>
+                  {state === 'collapsed' ? (
+                    <img
+                      src='/dejado-icon.svg'
+                      alt='Dejado'
+                      className='h-8 w-auto'
+                    />
+                  ) : (
+                    <div className='flex items-center'>
+                      <img
+                        src='/dejado-icon.svg'
+                        alt='Dejado'
+                        className='h-10 w-auto'
+                      />
+                      <span className='ml-2 text-lg font-semibold'>Dejado</span>
+                    </div>
+                  )}
+                </div>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className='overflow-x-hidden'>
+        {/* <div className='px-2 py-2'>
+          <OrgSwitcher />
+        </div> */}
         <SidebarGroup>
           <SidebarGroupLabel>Overview</SidebarGroupLabel>
           <SidebarMenu>
@@ -165,14 +195,18 @@ export default function AppSidebar() {
 
                 <DropdownMenuGroup>
                   <DropdownMenuItem
-                    onClick={() => router.push('/dashboard/auth-settings/profile')}
+                    onClick={() =>
+                      router.push('/dashboard/auth-settings/profile')
+                    }
                   >
                     <IconUserCircle className='mr-2 h-4 w-4' />
                     Profile
                   </DropdownMenuItem>
                   {organization && (
                     <DropdownMenuItem
-                      onClick={() => router.push('/dashboard/auth-settings/billing')}
+                      onClick={() =>
+                        router.push('/dashboard/auth-settings/billing')
+                      }
                     >
                       <IconCreditCard className='mr-2 h-4 w-4' />
                       Billing
