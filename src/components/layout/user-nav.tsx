@@ -12,6 +12,9 @@ import {
 import { UserAvatarProfile } from '@/components/user-avatar-profile';
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
+import { ModeToggle } from './ThemeToggle/theme-toggle';
+import { ThemeSelector } from '../theme-selector';
+
 export function UserNav() {
   const { user } = useUser();
   const router = useRouter();
@@ -24,7 +27,7 @@ export function UserNav() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className='w-56'
+          className='w-64'
           align='end'
           sideOffset={10}
           forceMount
@@ -47,6 +50,16 @@ export function UserNav() {
             <DropdownMenuItem>Billing</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuItem>New Team</DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <div className='flex items-center justify-between px-2 py-1.5'>
+              <span className='text-sm'>Appearance</span>
+              <ModeToggle />
+            </div>
+            <div className='px-2 py-1.5'>
+              <ThemeSelector minimal />
+            </div>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem>

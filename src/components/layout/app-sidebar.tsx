@@ -74,7 +74,7 @@ export default function AppSidebar() {
                     <img
                       src='/dejado-icon.svg'
                       alt='Dejado'
-                      className='h-8 w-auto'
+                      className='h-auto w-5 pl-0.5'
                     />
                   ) : (
                     <div className='flex items-center'>
@@ -155,7 +155,7 @@ export default function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      {/* <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -226,7 +226,7 @@ export default function AppSidebar() {
             </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
-      </SidebarFooter>
+      </SidebarFooter> */}
       <SidebarRail />
     </Sidebar>
   );
