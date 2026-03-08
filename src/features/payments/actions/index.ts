@@ -33,13 +33,36 @@ export async function createPaymentAction(data: PaymentData) {
   revalidatePath('/payments');
 }
 
+export async function updatePaymentAction(id: string, data: PaymentData) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  await db
+    .update(payments)
+    .set({
+      name: data.name,
+      dueDate: data.dueDate,
+      currency: data.currency,
+      amount: data.amount,
+      tag: data.tag,
+      frequency: data.frequency,
+      updatedAt: new Date()
+    })
+    .where(eq(payments.id, id));
+
+  revalidatePath('/payments');
+}
+
 export async function togglePaymentStatusAction(id: string, isPaid: boolean) {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
   await db
     .update(payments)
-    .set({ isPaid: String(isPaid) })
+    .set({
+      isPaid: String(isPaid),
+      paidAt: isPaid ? new Date() : null
+    })
     .where(eq(payments.id, id));
 
   revalidatePath('/payments');

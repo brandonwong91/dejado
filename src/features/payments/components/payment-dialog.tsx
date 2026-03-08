@@ -28,8 +28,8 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { createPaymentAction } from '../actions';
-import { PlusIcon } from 'lucide-react';
+import { createPaymentAction, updatePaymentAction } from '../actions';
+import { Edit2Icon, PlusIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 const formSchema = z.object({
@@ -41,34 +41,59 @@ const formSchema = z.object({
   frequency: z.string().min(1, 'Frequency is required')
 });
 
-export function AddPaymentDialog() {
+interface PaymentDialogProps {
+  initialData?: {
+    id: string;
+    name: string;
+    amount: string;
+    currency: string;
+    dueDate: Date;
+    tag: string | null;
+    frequency: string;
+  };
+  trigger?: React.ReactNode;
+}
+
+export function PaymentDialog({ initialData, trigger }: PaymentDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const isEditing = !!initialData;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: '',
-      dueDate: '',
-      currency: 'USD',
-      amount: '',
-      tag: '',
-      frequency: '30'
+      name: initialData?.name || '',
+      dueDate: initialData?.dueDate
+        ? initialData.dueDate.toISOString().split('T')[0]
+        : '',
+      currency: initialData?.currency || 'SGD',
+      amount: initialData?.amount || '',
+      tag: initialData?.tag || '',
+      frequency: initialData?.frequency || '30'
     }
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       setLoading(true);
-      await createPaymentAction({
+      const data = {
         ...values,
         dueDate: new Date(values.dueDate)
-      });
+      };
+
+      if (isEditing && initialData) {
+        await updatePaymentAction(initialData.id, data);
+        toast.success('Payment updated successfully');
+      } else {
+        await createPaymentAction(data);
+        toast.success('Payment added successfully');
+      }
       setOpen(false);
-      form.reset();
-      toast.success('Payment added successfully');
+      if (!isEditing) form.reset();
     } catch (error) {
-      toast.error('Failed to add payment');
+      toast.error(
+        isEditing ? 'Failed to update payment' : 'Failed to add payment'
+      );
     } finally {
       setLoading(false);
     }
@@ -77,14 +102,18 @@ export function AddPaymentDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className='gap-2'>
-          <PlusIcon className='size-4' />
-          Add Payment
-        </Button>
+        {trigger || (
+          <Button className='gap-2'>
+            <PlusIcon className='size-4' />
+            Add Payment
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className='sm:max-w-[425px]'>
         <DialogHeader>
-          <DialogTitle>Add New Recurring Payment</DialogTitle>
+          <DialogTitle>
+            {isEditing ? 'Edit Recurring Payment' : 'Add New Recurring Payment'}
+          </DialogTitle>
         </DialogHeader>
         <Form
           form={form}
@@ -112,7 +141,12 @@ export function AddPaymentDialog() {
                 <FormItem>
                   <FormLabel>Amount</FormLabel>
                   <FormControl>
-                    <Input type='number' placeholder='0.00' {...field} />
+                    <Input
+                      type='number'
+                      step='0.01'
+                      placeholder='0.00'
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -134,11 +168,8 @@ export function AddPaymentDialog() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value='USD'>USD</SelectItem>
-                      <SelectItem value='EUR'>EUR</SelectItem>
-                      <SelectItem value='GBP'>GBP</SelectItem>
-                      <SelectItem value='JPY'>JPY</SelectItem>
-                      <SelectItem value='CAD'>CAD</SelectItem>
+                      <SelectItem value='SGD'>SGD</SelectItem>
+                      <SelectItem value='MYR'>MYR</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -199,7 +230,13 @@ export function AddPaymentDialog() {
               Cancel
             </Button>
             <Button type='submit' disabled={loading}>
-              {loading ? 'Adding...' : 'Add Payment'}
+              {loading
+                ? isEditing
+                  ? 'Updating...'
+                  : 'Adding...'
+                : isEditing
+                  ? 'Save Changes'
+                  : 'Add Payment'}
             </Button>
           </div>
         </Form>

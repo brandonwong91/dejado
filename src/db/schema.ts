@@ -20,6 +20,7 @@ export const payments = pgTable('payments', {
   tag: text('tag'),
   frequency: text('frequency').notNull(), // e.g. "30" for 30 days
   isPaid: text('is_paid').default('false').notNull(), // boolean-like text
+  paidAt: timestamp('paid_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
