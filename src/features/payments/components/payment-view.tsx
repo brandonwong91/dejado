@@ -3,6 +3,125 @@
 import { PaymentDialog } from './payment-dialog';
 import { PaymentCard } from './payment-card';
 import { Separator } from '@/components/ui/separator';
+import { renewAllPaidPaymentsAction } from '../actions';
+import { Button } from '@/components/ui/button';
+import {
+  RefreshCwIcon,
+  ChevronDown,
+  ChevronRight,
+  CalculatorIcon
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+
+interface Payment {
+  id: string;
+  name: string;
+  amount: string;
+  currency: string;
+  dueDate: Date;
+  tag: string | null;
+  frequency: string;
+  isPaid: string;
+  paidAt: Date | null;
+}
+
+interface PaymentViewProps {
+  payments: Payment[];
+}
+
+function CurrencyTotal({
+  amount,
+  baseCurrency
+}: {
+  amount: number;
+  baseCurrency: string;
+}) {
+  const [displayCurrency, setDisplayCurrency] = useState(baseCurrency);
+  const [exchangeRate, setExchangeRate] = useState(1);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (displayCurrency === baseCurrency) {
+      setExchangeRate(1);
+      return;
+    }
+
+    const fetchRate = async () => {
+      try {
+        setLoading(true);
+        // Using a reliable free currency API
+        const res = await fetch(
+          `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${baseCurrency.toLowerCase()}.json`
+        );
+        const data = await res.json();
+        const rate =
+          data[baseCurrency.toLowerCase()][displayCurrency.toLowerCase()];
+        setExchangeRate(rate);
+      } catch (error) {
+        toast.error('Failed to fetch exchange rate');
+        setDisplayCurrency(baseCurrency);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRate();
+  }, [displayCurrency, baseCurrency]);
+
+  const convertedAmount = amount * exchangeRate;
+  const currencies = ['SGD', 'MYR'];
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className='hover:bg-muted/50 group -m-1 rounded p-1 text-right transition-colors'>
+          <span className='text-muted-foreground mr-2 text-xs font-medium uppercase'>
+            {displayCurrency === baseCurrency
+              ? 'Group Total:'
+              : `Converted (${displayCurrency}):`}
+          </span>
+          <span
+            className={cn(
+              'font-mono text-sm font-bold',
+              loading && 'animate-pulse'
+            )}
+          >
+            {convertedAmount.toFixed(2)} <small>{displayCurrency}</small>
+          </span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align='end'>
+        {currencies.map((curr) => (
+          <DropdownMenuItem
+            key={curr}
+            onClick={() => setDisplayCurrency(curr)}
+            disabled={displayCurrency === curr}
+            className='gap-2'
+          >
+            <CalculatorIcon className='size-3.5 opacity-50' />
+            Show in {curr}
+          </DropdownMenuItem>
+        ))}
+        {displayCurrency !== baseCurrency && (
+          <DropdownMenuItem
+            onClick={() => setDisplayCurrency(baseCurrency)}
+            className='text-destructive focus:text-destructive'
+          >
+            Reset to {baseCurrency}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 interface Payment {
   id: string;
@@ -21,6 +140,9 @@ interface PaymentViewProps {
 }
 
 export function PaymentView({ payments }: PaymentViewProps) {
+  const [upcomingExpanded, setUpcomingExpanded] = useState(true);
+  const [paidExpanded, setPaidExpanded] = useState(true);
+
   const activePayments = payments.filter((p) => p.isPaid === 'false');
   const paidPayments = payments.filter((p) => p.isPaid === 'true');
 
@@ -35,7 +157,6 @@ export function PaymentView({ payments }: PaymentViewProps) {
       groups[tag].total += parseFloat(p.amount) || 0;
     });
 
-    // Sort tags alphabetically and payments by due date within each tag
     return Object.entries(groups)
       .sort(([tagA], [tagB]) => tagA.localeCompare(tagB))
       .map(([tag, data]) => ({
@@ -69,40 +190,53 @@ export function PaymentView({ payments }: PaymentViewProps) {
       <div className='space-y-10'>
         {/* Active Payments Section */}
         <section className='space-y-6'>
-          <h3 className='text-muted-foreground/70 px-1 text-sm font-medium tracking-wider uppercase'>
-            Upcoming Payments ({activePayments.length})
-          </h3>
-          {activeGroups.length > 0 ? (
-            <div className='space-y-8'>
-              {activeGroups.map((group) => (
-                <div key={group.tag} className='space-y-3'>
-                  <div className='flex items-end justify-between px-1'>
-                    <h4 className='text-muted-foreground text-sm font-bold tracking-tight uppercase'>
-                      {group.tag}
-                    </h4>
-                    <div className='text-right'>
-                      <span className='text-muted-foreground text-xs font-medium uppercase'>
-                        Group Total:
-                      </span>
-                      <span className='ml-2 font-mono text-sm font-bold'>
-                        {group.total.toFixed(2)} <small>{group.currency}</small>
-                      </span>
+          <button
+            onClick={() => setUpcomingExpanded(!upcomingExpanded)}
+            className='text-muted-foreground/70 hover:text-foreground flex h-8 items-center gap-2 px-1 transition-colors'
+          >
+            {upcomingExpanded ? (
+              <ChevronDown className='size-4' />
+            ) : (
+              <ChevronRight className='size-4' />
+            )}
+            <h3 className='text-sm font-medium tracking-wider uppercase'>
+              Upcoming Payments ({activePayments.length})
+            </h3>
+          </button>
+
+          {upcomingExpanded && (
+            <>
+              {activeGroups.length > 0 ? (
+                <div className='space-y-8'>
+                  {activeGroups.map((group) => (
+                    <div key={group.tag} className='space-y-3'>
+                      <div className='flex items-end justify-between px-1'>
+                        <h4 className='text-muted-foreground text-sm font-bold tracking-tight uppercase'>
+                          {group.tag}
+                        </h4>
+                        <div className='text-right'>
+                          <CurrencyTotal
+                            amount={group.total}
+                            baseCurrency={group.currency}
+                          />
+                        </div>
+                      </div>
+                      <div className='grid gap-3'>
+                        {group.payments.map((payment) => (
+                          <PaymentCard key={payment.id} payment={payment} />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <div className='grid gap-3'>
-                    {group.payments.map((payment) => (
-                      <PaymentCard key={payment.id} payment={payment} />
-                    ))}
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className='bg-muted/20 flex flex-col items-center justify-center rounded-xl border border-dashed p-12'>
-              <p className='text-muted-foreground'>
-                All caught up! No upcoming payments.
-              </p>
-            </div>
+              ) : (
+                <div className='bg-muted/20 flex flex-col items-center justify-center rounded-xl border border-dashed p-12'>
+                  <p className='text-muted-foreground'>
+                    All caught up! No upcoming payments.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </section>
 
@@ -110,38 +244,73 @@ export function PaymentView({ payments }: PaymentViewProps) {
 
         {/* Paid Payments Section */}
         <section className='space-y-6'>
-          <h3 className='text-muted-foreground/50 px-1 text-sm font-medium tracking-wider uppercase'>
-            Marked as Paid ({paidPayments.length})
-          </h3>
-          {paidGroups.length > 0 ? (
-            <div className='space-y-8 opacity-80'>
-              {paidGroups.map((group) => (
-                <div key={group.tag} className='space-y-3'>
-                  <div className='flex items-end justify-between px-1'>
-                    <h4 className='text-muted-foreground/60 text-xs font-semibold uppercase'>
-                      {group.tag}
-                    </h4>
-                    <div className='text-muted-foreground/60 text-right'>
-                      <span className='text-[10px] font-medium uppercase'>
-                        Paid Total:
-                      </span>
-                      <span className='ml-2 font-mono text-xs font-bold line-through'>
-                        {group.total.toFixed(2)} {group.currency}
-                      </span>
+          <div className='flex h-8 items-center justify-between px-1'>
+            <button
+              onClick={() => setPaidExpanded(!paidExpanded)}
+              className='text-muted-foreground/50 hover:text-foreground flex h-full items-center gap-2 transition-colors'
+            >
+              {paidExpanded ? (
+                <ChevronDown className='size-4' />
+              ) : (
+                <ChevronRight className='size-4' />
+              )}
+              <h3 className='text-sm font-medium tracking-wider uppercase'>
+                Marked as Paid ({paidPayments.length})
+              </h3>
+            </button>
+            {paidPayments.length > 0 && paidExpanded && (
+              <Button
+                variant='ghost'
+                size='sm'
+                className='text-muted-foreground hover:text-primary h-8 gap-2 text-xs transition-colors'
+                onClick={async () => {
+                  try {
+                    await renewAllPaidPaymentsAction();
+                    toast.success('All items renewed for the next cycle');
+                  } catch (error) {
+                    toast.error('Failed to renew all items');
+                  }
+                }}
+              >
+                <RefreshCwIcon className='size-3' />
+                Renew All
+              </Button>
+            )}
+          </div>
+
+          {paidExpanded && (
+            <>
+              {paidGroups.length > 0 ? (
+                <div className='space-y-8 opacity-80'>
+                  {paidGroups.map((group) => (
+                    <div key={group.tag} className='space-y-3'>
+                      <div className='flex items-end justify-between px-1'>
+                        <h4 className='text-muted-foreground/60 text-xs font-semibold uppercase'>
+                          {group.tag}
+                        </h4>
+                        <div className='text-muted-foreground/60 text-right'>
+                          <div className='text-muted-foreground/60 text-right'>
+                            <CurrencyTotal
+                              amount={group.total}
+                              baseCurrency={group.currency}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className='grid gap-3'>
+                        {group.payments.map((payment) => (
+                          <PaymentCard key={payment.id} payment={payment} />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <div className='grid gap-3'>
-                    {group.payments.map((payment) => (
-                      <PaymentCard key={payment.id} payment={payment} />
-                    ))}
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className='text-muted-foreground/40 p-8 text-center text-sm italic'>
-              No payments marked as paid yet.
-            </div>
+              ) : (
+                <div className='text-muted-foreground/40 p-8 text-center text-sm italic'>
+                  No payments marked as paid yet.
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>

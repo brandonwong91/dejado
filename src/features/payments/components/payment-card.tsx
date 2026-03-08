@@ -10,10 +10,15 @@ import {
   CheckCircle2Icon,
   Edit2Icon,
   RepeatIcon,
-  Trash2Icon
+  Trash2Icon,
+  RefreshCwIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { deletePaymentAction, togglePaymentStatusAction } from '../actions';
+import {
+  deletePaymentAction,
+  renewPaymentAction,
+  togglePaymentStatusAction
+} from '../actions';
 import { PaymentDialog } from './payment-dialog';
 
 interface PaymentCardProps {
@@ -164,6 +169,22 @@ export function PaymentCard({ payment }: PaymentCardProps) {
           </div>
 
           <div className='flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
+            {isPaid && (
+              <button
+                onClick={async () => {
+                  try {
+                    await renewPaymentAction(payment.id);
+                    toast.success('Payment renewed for the next cycle');
+                  } catch (error) {
+                    toast.error('Failed to renew payment');
+                  }
+                }}
+                className='bg-muted/50 text-muted-foreground hover:text-primary rounded-md p-1.5 transition-colors'
+                title='Renew for next cycle'
+              >
+                <RefreshCwIcon className='size-4' />
+              </button>
+            )}
             <PaymentDialog
               initialData={payment}
               trigger={

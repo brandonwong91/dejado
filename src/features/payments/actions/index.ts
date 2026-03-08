@@ -4,7 +4,8 @@ import { db } from '@/db';
 import { payments } from '@/db/schema';
 import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
-import { eq } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
+import { addDays } from 'date-fns';
 
 export interface PaymentData {
   name: string;
@@ -64,6 +65,62 @@ export async function togglePaymentStatusAction(id: string, isPaid: boolean) {
       paidAt: isPaid ? new Date() : null
     })
     .where(eq(payments.id, id));
+
+  revalidatePath('/payments');
+}
+
+export async function renewPaymentAction(id: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const [payment] = await db
+    .select()
+    .from(payments)
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)));
+
+  if (!payment) throw new Error('Payment not found');
+
+  const frequencyDays = parseInt(payment.frequency) || 30;
+  const newDueDate = addDays(new Date(payment.dueDate), frequencyDays);
+
+  await db
+    .update(payments)
+    .set({
+      dueDate: newDueDate,
+      isPaid: 'false',
+      paidAt: null,
+      updatedAt: new Date()
+    })
+    .where(eq(payments.id, id));
+
+  revalidatePath('/payments');
+}
+
+export async function renewAllPaidPaymentsAction() {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  // We fetch paid payments first to calculate their new dates
+  // Drizzle doesn't support easy column-based date math in a generic .set() for all providers without complex fragments
+  const paidItems = await db
+    .select()
+    .from(payments)
+    .where(and(eq(payments.userId, userId), eq(payments.isPaid, 'true')));
+
+  for (const payment of paidItems) {
+    const frequencyDays = parseInt(payment.frequency) || 30;
+    const newDueDate = addDays(new Date(payment.dueDate), frequencyDays);
+
+    await db
+      .update(payments)
+      .set({
+        dueDate: newDueDate,
+        isPaid: 'false',
+        paidAt: null,
+        updatedAt: new Date()
+      })
+      .where(eq(payments.id, payment.id));
+  }
 
   revalidatePath('/payments');
 }
