@@ -175,16 +175,18 @@ export function PaymentView({ payments }: PaymentViewProps) {
 
   return (
     <div className='space-y-8 pb-10'>
-      <div className='flex items-center justify-between'>
+      <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
         <div>
-          <h2 className='text-3xl font-bold tracking-tight'>
+          <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
             Recurring Payments
           </h2>
-          <p className='text-muted-foreground'>
+          <p className='text-muted-foreground text-sm md:text-base'>
             Manage and track your subscription and bill cycles.
           </p>
         </div>
-        <PaymentDialog />
+        <div className='flex shrink-0 items-center justify-start sm:justify-end'>
+          <PaymentDialog />
+        </div>
       </div>
 
       <div className='space-y-10'>
@@ -199,7 +201,7 @@ export function PaymentView({ payments }: PaymentViewProps) {
             ) : (
               <ChevronRight className='size-4' />
             )}
-            <h3 className='text-sm font-medium tracking-wider uppercase'>
+            <h3 className='text-xs font-medium tracking-wider uppercase'>
               Upcoming Payments ({activePayments.length})
             </h3>
           </button>
@@ -210,11 +212,11 @@ export function PaymentView({ payments }: PaymentViewProps) {
                 <div className='space-y-8'>
                   {activeGroups.map((group) => (
                     <div key={group.tag} className='space-y-3'>
-                      <div className='flex items-end justify-between px-1'>
-                        <h4 className='text-muted-foreground text-sm font-bold tracking-tight uppercase'>
+                      <div className='flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between'>
+                        <h4 className='text-muted-foreground text-xs font-bold tracking-tight uppercase md:text-sm'>
                           {group.tag}
                         </h4>
-                        <div className='text-right'>
+                        <div className='text-left sm:text-right'>
                           <CurrencyTotal
                             amount={group.total}
                             baseCurrency={group.currency}
@@ -244,17 +246,17 @@ export function PaymentView({ payments }: PaymentViewProps) {
 
         {/* Paid Payments Section */}
         <section className='space-y-6'>
-          <div className='flex h-8 items-center justify-between px-1'>
+          <div className='flex flex-col gap-2 px-1 sm:h-8 sm:flex-row sm:items-center sm:justify-between'>
             <button
               onClick={() => setPaidExpanded(!paidExpanded)}
-              className='text-muted-foreground/50 hover:text-foreground flex h-full items-center gap-2 transition-colors'
+              className='text-muted-foreground/50 hover:text-foreground flex items-center gap-2 transition-colors sm:h-full'
             >
               {paidExpanded ? (
                 <ChevronDown className='size-4' />
               ) : (
                 <ChevronRight className='size-4' />
               )}
-              <h3 className='text-sm font-medium tracking-wider uppercase'>
+              <h3 className='text-xs font-medium tracking-wider uppercase'>
                 Marked as Paid ({paidPayments.length})
               </h3>
             </button>
@@ -262,7 +264,7 @@ export function PaymentView({ payments }: PaymentViewProps) {
               <Button
                 variant='ghost'
                 size='sm'
-                className='text-muted-foreground hover:text-primary h-8 gap-2 text-xs transition-colors'
+                className='text-muted-foreground hover:text-primary h-8 w-fit gap-2 px-0 text-xs transition-colors sm:px-3'
                 onClick={async () => {
                   try {
                     await renewAllPaidPaymentsAction();
@@ -284,12 +286,12 @@ export function PaymentView({ payments }: PaymentViewProps) {
                 <div className='space-y-8 opacity-80'>
                   {paidGroups.map((group) => (
                     <div key={group.tag} className='space-y-3'>
-                      <div className='flex items-end justify-between px-1'>
-                        <h4 className='text-muted-foreground/60 text-xs font-semibold uppercase'>
+                      <div className='flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between'>
+                        <h4 className='text-muted-foreground/60 text-[10px] font-semibold uppercase md:text-xs'>
                           {group.tag}
                         </h4>
-                        <div className='text-muted-foreground/60 text-right'>
-                          <div className='text-muted-foreground/60 text-right'>
+                        <div className='text-left sm:text-right'>
+                          <div className='text-left sm:text-right'>
                             <CurrencyTotal
                               amount={group.total}
                               baseCurrency={group.currency}
