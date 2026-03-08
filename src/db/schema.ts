@@ -40,3 +40,62 @@ export const purchases = pgTable('purchases', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
+
+export const exercises = pgTable('exercises', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  type: text('type').default('weighted').notNull(), // weighted | bodyweight
+  bestScore: text('best_score'),
+  lastAttemptedAt: timestamp('last_attempted_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
+export const workouts = pgTable('workouts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  scheduledDays: text('scheduled_days'), // e.g., "Mon,Wed,Fri"
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
+export const workoutExercises = pgTable('workout_exercises', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  workoutId: uuid('workout_id')
+    .references(() => workouts.id, { onDelete: 'cascade' })
+    .notNull(),
+  exerciseId: uuid('exercise_id')
+    .references(() => exercises.id, { onDelete: 'cascade' })
+    .notNull(),
+  order: text('order').default('0'),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+});
+
+export const workoutSessions = pgTable('workout_sessions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  workoutId: uuid('workout_id').references(() => workouts.id, {
+    onDelete: 'set null'
+  }),
+  workoutName: text('workout_name'), // Snapshot name in case workout is deleted
+  startedAt: timestamp('started_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+});
+
+export const exerciseSets = pgTable('exercise_sets', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionId: uuid('session_id')
+    .references(() => workoutSessions.id, { onDelete: 'cascade' })
+    .notNull(),
+  exerciseId: uuid('exercise_id')
+    .references(() => exercises.id, { onDelete: 'cascade' })
+    .notNull(),
+  weight: text('weight'), // in kg
+  reps: text('reps'),
+  order: text('order').default('0'),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+});
