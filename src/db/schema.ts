@@ -24,3 +24,19 @@ export const payments = pgTable('payments', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
+
+export const purchases = pgTable('purchases', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  category: text('category').notNull().default('Groceries'), // Groceries | Essentials
+  tag: text('tag'),
+  quantity: text('quantity'),
+  dueDate: timestamp('due_date'), // Predicted next purchase date
+  frequency: text('frequency'), // predicted frequency in days
+  isBought: text('is_bought').default('false').notNull(),
+  lastBoughtAt: timestamp('last_bought_at'),
+  previousBoughtAt: timestamp('previous_bought_at'), // To calculate new frequency
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});

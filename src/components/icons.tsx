@@ -83,5 +83,6 @@ export const Icons = {
   lock: IconLock,
   key: IconKey,
   account: IconUserCircle,
-  profile: IconUser
+  profile: IconUser,
+  purchase: IconShoppingBag
 };
