@@ -123,21 +123,7 @@ function CurrencyTotal({
   );
 }
 
-interface Payment {
-  id: string;
-  name: string;
-  amount: string;
-  currency: string;
-  dueDate: Date;
-  tag: string | null;
-  frequency: string;
-  isPaid: string;
-  paidAt: Date | null;
-}
-
-interface PaymentViewProps {
-  payments: Payment[];
-}
+import { PaymentCalendar } from './payment-calendar';
 
 export function PaymentView({ payments }: PaymentViewProps) {
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
@@ -189,108 +175,49 @@ export function PaymentView({ payments }: PaymentViewProps) {
         </div>
       </div>
 
-      <div className='space-y-10'>
-        {/* Active Payments Section */}
-        <section className='space-y-6'>
-          <button
-            onClick={() => setUpcomingExpanded(!upcomingExpanded)}
-            className='text-muted-foreground/70 hover:text-foreground flex h-8 items-center gap-2 px-1 transition-colors'
-          >
-            {upcomingExpanded ? (
-              <ChevronDown className='size-4' />
-            ) : (
-              <ChevronRight className='size-4' />
-            )}
-            <h3 className='text-xs font-medium tracking-wider uppercase'>
-              Upcoming Payments ({activePayments.length})
-            </h3>
-          </button>
+      <div className='flex flex-col gap-8 lg:flex-row'>
+        {/* Calendar Panel - Left on Desktop, Top on Mobile */}
+        <aside className='w-full lg:w-[350px] lg:shrink-0'>
+          <div className='sticky top-4 space-y-4'>
+            <div className='px-1'>
+              <h3 className='text-muted-foreground text-xs font-semibold tracking-wider uppercase'>
+                Monthly Overview
+              </h3>
+            </div>
+            <div className='flex justify-center'>
+              <PaymentCalendar payments={payments} />
+            </div>
+          </div>
+        </aside>
 
-          {upcomingExpanded && (
-            <>
-              {activeGroups.length > 0 ? (
-                <div className='space-y-8'>
-                  {activeGroups.map((group) => (
-                    <div key={group.tag} className='space-y-3'>
-                      <div className='flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between'>
-                        <h4 className='text-muted-foreground text-xs font-bold tracking-tight uppercase md:text-sm'>
-                          {group.tag}
-                        </h4>
-                        <div className='text-left sm:text-right'>
-                          <CurrencyTotal
-                            amount={group.total}
-                            baseCurrency={group.currency}
-                          />
-                        </div>
-                      </div>
-                      <div className='grid gap-3'>
-                        {group.payments.map((payment) => (
-                          <PaymentCard key={payment.id} payment={payment} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className='bg-muted/20 flex flex-col items-center justify-center rounded-xl border border-dashed p-12'>
-                  <p className='text-muted-foreground'>
-                    All caught up! No upcoming payments.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-        </section>
-
-        <Separator className='my-2' />
-
-        {/* Paid Payments Section */}
-        <section className='space-y-6'>
-          <div className='flex flex-col gap-2 px-1 sm:h-8 sm:flex-row sm:items-center sm:justify-between'>
+        {/* List Panel - Right on Desktop, Bottom on Mobile */}
+        <div className='flex-1 space-y-10'>
+          {/* Active Payments Section */}
+          <section className='space-y-6'>
             <button
-              onClick={() => setPaidExpanded(!paidExpanded)}
-              className='text-muted-foreground/50 hover:text-foreground flex items-center gap-2 transition-colors sm:h-full'
+              onClick={() => setUpcomingExpanded(!upcomingExpanded)}
+              className='text-muted-foreground/70 hover:text-foreground flex h-8 items-center gap-2 px-1 transition-colors'
             >
-              {paidExpanded ? (
+              {upcomingExpanded ? (
                 <ChevronDown className='size-4' />
               ) : (
                 <ChevronRight className='size-4' />
               )}
               <h3 className='text-xs font-medium tracking-wider uppercase'>
-                Marked as Paid ({paidPayments.length})
+                Upcoming Payments ({activePayments.length})
               </h3>
             </button>
-            {paidPayments.length > 0 && paidExpanded && (
-              <Button
-                variant='ghost'
-                size='sm'
-                className='text-muted-foreground hover:text-primary h-8 w-fit gap-2 px-0 text-xs transition-colors sm:px-3'
-                onClick={async () => {
-                  try {
-                    await renewAllPaidPaymentsAction();
-                    toast.success('All items renewed for the next cycle');
-                  } catch (error) {
-                    toast.error('Failed to renew all items');
-                  }
-                }}
-              >
-                <RefreshCwIcon className='size-3' />
-                Renew All
-              </Button>
-            )}
-          </div>
 
-          {paidExpanded && (
-            <>
-              {paidGroups.length > 0 ? (
-                <div className='space-y-8 opacity-80'>
-                  {paidGroups.map((group) => (
-                    <div key={group.tag} className='space-y-3'>
-                      <div className='flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between'>
-                        <h4 className='text-muted-foreground/60 text-[10px] font-semibold uppercase md:text-xs'>
-                          {group.tag}
-                        </h4>
-                        <div className='text-left sm:text-right'>
+            {upcomingExpanded && (
+              <>
+                {activeGroups.length > 0 ? (
+                  <div className='space-y-8'>
+                    {activeGroups.map((group) => (
+                      <div key={group.tag} className='space-y-3'>
+                        <div className='flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between'>
+                          <h4 className='text-muted-foreground text-xs font-bold tracking-tight uppercase md:text-sm'>
+                            {group.tag}
+                          </h4>
                           <div className='text-left sm:text-right'>
                             <CurrencyTotal
                               amount={group.total}
@@ -298,23 +225,99 @@ export function PaymentView({ payments }: PaymentViewProps) {
                             />
                           </div>
                         </div>
+                        <div className='grid gap-3'>
+                          {group.payments.map((payment) => (
+                            <PaymentCard key={payment.id} payment={payment} />
+                          ))}
+                        </div>
                       </div>
-                      <div className='grid gap-3'>
-                        {group.payments.map((payment) => (
-                          <PaymentCard key={payment.id} payment={payment} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className='text-muted-foreground/40 p-8 text-center text-sm italic'>
-                  No payments marked as paid yet.
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className='bg-muted/20 flex flex-col items-center justify-center rounded-xl border border-dashed p-12'>
+                    <p className='text-muted-foreground'>
+                      All caught up! No upcoming payments.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+
+          <Separator className='my-2' />
+
+          {/* Paid Payments Section */}
+          <section className='space-y-6'>
+            <div className='flex flex-col gap-2 px-1 sm:h-8 sm:flex-row sm:items-center sm:justify-between'>
+              <button
+                onClick={() => setPaidExpanded(!paidExpanded)}
+                className='text-muted-foreground/50 hover:text-foreground flex items-center gap-2 transition-colors sm:h-full'
+              >
+                {paidExpanded ? (
+                  <ChevronDown className='size-4' />
+                ) : (
+                  <ChevronRight className='size-4' />
+                )}
+                <h3 className='text-xs font-medium tracking-wider uppercase'>
+                  Marked as Paid ({paidPayments.length})
+                </h3>
+              </button>
+              {paidPayments.length > 0 && paidExpanded && (
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  className='text-muted-foreground hover:text-primary h-8 w-fit gap-2 px-0 text-xs transition-colors sm:px-3'
+                  onClick={async () => {
+                    try {
+                      await renewAllPaidPaymentsAction();
+                      toast.success('All items renewed for the next cycle');
+                    } catch (error) {
+                      toast.error('Failed to renew all items');
+                    }
+                  }}
+                >
+                  <RefreshCwIcon className='size-3' />
+                  Renew All
+                </Button>
               )}
-            </>
-          )}
-        </section>
+            </div>
+
+            {paidExpanded && (
+              <>
+                {paidGroups.length > 0 ? (
+                  <div className='space-y-8 opacity-80'>
+                    {paidGroups.map((group) => (
+                      <div key={group.tag} className='space-y-3'>
+                        <div className='flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between'>
+                          <h4 className='text-muted-foreground/60 text-[10px] font-semibold uppercase md:text-xs'>
+                            {group.tag}
+                          </h4>
+                          <div className='text-left sm:text-right'>
+                            <div className='text-left sm:text-right'>
+                              <CurrencyTotal
+                                amount={group.total}
+                                baseCurrency={group.currency}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <div className='grid gap-3'>
+                          {group.payments.map((payment) => (
+                            <PaymentCard key={payment.id} payment={payment} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className='text-muted-foreground/40 p-8 text-center text-sm italic'>
+                    No payments marked as paid yet.
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );
