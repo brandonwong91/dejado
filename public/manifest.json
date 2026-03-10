@@ -1,0 +1,25 @@
+{
+    "name": "Dejado",
+    "short_name": "Dejado",
+    "description": "Your personal app",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#000000",
+    "icons": [
+        {
+            "src": "/favicon.ico",
+            "sizes": "any",
+            "type": "image/x-icon"
+        }
+    ],
+    "share_target": {
+        "action": "/lists",
+        "method": "GET",
+        "params": {
+            "title": "shareTitle",
+            "text": "shareText",
+            "url": "shareUrl"
+        }
+    }
+}

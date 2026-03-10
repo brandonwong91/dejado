@@ -20,7 +20,8 @@ export const metadata: Metadata = {
   description: 'Manage your workspaces and projects with Dejado.',
   icons: {
     icon: '/dejado-icon.svg'
-  }
+  },
+  manifest: '/manifest.json'
 };
 
 export const viewport: Viewport = {

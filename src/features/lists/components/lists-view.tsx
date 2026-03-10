@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -53,17 +54,33 @@ interface ListItem {
   isCompleted: string;
 }
 
-export function ListsView({
+function ListsViewInner({
   lists,
   items
 }: {
   lists: List[];
   items: ListItem[];
 }) {
+  const searchParams = useSearchParams();
   const [activeListId, setActiveListId] = useState<string>(lists[0]?.id || '');
   const [urlInput, setUrlInput] = useState('');
   const [isAddingList, setIsAddingList] = useState(false);
   const [newListName, setNewListName] = useState('');
+
+  useEffect(() => {
+    const sharedText = searchParams.get('text');
+    const sharedUrl = searchParams.get('url');
+    // Mobile OS sometimes puts URL in text or URL.
+    const urlPattern = /(https?:\/\/[^\s]+)/;
+    if (sharedUrl && urlPattern.test(sharedUrl)) {
+      setUrlInput(sharedUrl);
+      toast.success('Ready to save shared link!');
+    } else if (sharedText && urlPattern.test(sharedText)) {
+      const match = sharedText.match(urlPattern);
+      if (match) setUrlInput(match[0]);
+      toast.success('Ready to save shared link!');
+    }
+  }, [searchParams]);
 
   const activeItems = items.filter((item) => item.listId === activeListId);
 
@@ -370,5 +387,25 @@ export function ListsView({
         </Tabs>
       </div>
     </div>
+  );
+}
+
+export function ListsView({
+  lists,
+  items
+}: {
+  lists: List[];
+  items: ListItem[];
+}) {
+  return (
+    <Suspense
+      fallback={
+        <div className='flex justify-center p-8'>
+          <div className='bg-primary size-8 animate-pulse rounded-full' />
+        </div>
+      }
+    >
+      <ListsViewInner lists={lists} items={items} />
+    </Suspense>
   );
 }

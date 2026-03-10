@@ -1,5 +1,11 @@
 import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
+import withSerwistInit from '@serwist/next';
+
+const withSerwist = withSerwistInit({
+  swSrc: 'src/app/sw.ts',
+  swDest: 'public/sw.js'
+});
 
 // Define the base Next.js configuration
 const baseConfig: NextConfig = {
@@ -63,5 +69,5 @@ if (!process.env.NEXT_PUBLIC_SENTRY_DISABLED) {
   });
 }
 
-const nextConfig = configWithPlugins;
+const nextConfig = withSerwist(configWithPlugins);
 export default nextConfig;
