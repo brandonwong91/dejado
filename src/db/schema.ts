@@ -99,3 +99,27 @@ export const exerciseSets = pgTable('exercise_sets', {
   order: text('order').default('0'),
   createdAt: timestamp('created_at').defaultNow().notNull()
 });
+
+export const lists = pgTable('lists', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
+export const listItems = pgTable('list_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  listId: uuid('list_id')
+    .references(() => lists.id, { onDelete: 'cascade' })
+    .notNull(),
+  url: text('url').notNull(),
+  title: text('title'),
+  platform: text('platform'), // extracted platform (e.g., "youtube", "twitter")
+  tags: text('tags'), // comma-separated personal tags
+  isCompleted: text('is_completed').default('false').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
