@@ -137,9 +137,12 @@ export function WorkoutDialog({
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       setLoading(true);
+      const sortedDays = [...values.scheduledDays].sort((a, b) => {
+        return DAYS.indexOf(a) - DAYS.indexOf(b);
+      });
       const data = {
         ...values,
-        scheduledDays: values.scheduledDays.join(',')
+        scheduledDays: sortedDays.join(',')
       };
 
       if (isEditing) {

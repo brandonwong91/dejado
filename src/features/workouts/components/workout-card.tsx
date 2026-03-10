@@ -54,7 +54,20 @@ export function WorkoutCard({
   workoutExercises,
   sessions
 }: WorkoutCardProps) {
-  const days = workout.scheduledDays?.split(',').filter(Boolean) || [];
+  const DAY_ORDER = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday'
+  ];
+  const days = (workout.scheduledDays?.split(',').filter(Boolean) || []).sort(
+    (a, b) => {
+      return DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b);
+    }
+  );
   const completedSessions = sessions.filter((s) => s.completedAt);
   const lastSession =
     completedSessions.length > 0
