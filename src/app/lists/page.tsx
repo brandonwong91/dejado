@@ -24,20 +24,8 @@ export default async function ListsPage() {
     .where(eq(listItems.userId, userId));
 
   return (
-    <PageContainer scrollable>
-      <div className='mx-auto flex max-w-7xl flex-1 flex-col space-y-4 px-4 py-8'>
-        <div className='flex items-center justify-between'>
-          <div className='space-y-1'>
-            <h2 className='text-3xl font-black tracking-tighter uppercase sm:text-4xl'>
-              Your Lists
-            </h2>
-            <p className='text-muted-foreground hidden text-sm font-medium tracking-wide sm:block'>
-              Manage your links and items neatly
-            </p>
-          </div>
-        </div>
-        <ListsView lists={userLists} items={userListItems} />
-      </div>
+    <PageContainer>
+      <ListsView lists={userLists} items={userListItems} />
     </PageContainer>
   );
 }
