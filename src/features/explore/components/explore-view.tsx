@@ -28,7 +28,13 @@ interface PublicList {
   itemCount: number;
 }
 
-export function ExploreView({ lists }: { lists: PublicList[] }) {
+export function ExploreView({
+  lists,
+  userId
+}: {
+  lists: PublicList[];
+  userId: string | null;
+}) {
   const [search, setSearch] = useState('');
 
   const filteredLists = lists.filter(
@@ -48,6 +54,16 @@ export function ExploreView({ lists }: { lists: PublicList[] }) {
             Browse and discover curated links shared by the community.
           </p>
         </div>
+        {!userId && (
+          <div className='flex items-center gap-2'>
+            <Button variant='outline' asChild>
+              <Link href='/auth/sign-in'>Sign In</Link>
+            </Button>
+            <Button asChild>
+              <Link href='/auth/sign-up'>Get Started</Link>
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className='relative max-w-md'>
