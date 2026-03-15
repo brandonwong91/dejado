@@ -2,7 +2,7 @@
 
 import { db } from '@/db';
 import { lists, listItems } from '@/db/schema';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
 
@@ -40,6 +40,38 @@ export async function updateListAction(
     .where(eq(lists.id, id));
 
   revalidatePath('/lists');
+  revalidatePath(`/lists/${id}`);
+}
+
+export async function toggleListPublicAction(id: string, isPublic: boolean) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  await db
+    .update(lists)
+    .set({
+      isPublic: isPublic ? 'true' : 'false',
+      updatedAt: new Date()
+    })
+    .where(eq(lists.id, id));
+
+  revalidatePath('/lists');
+  revalidatePath(`/lists/${id}`);
+  revalidatePath('/explore');
+}
+
+export async function shareListAction(listId: string, email: string) {
+  const { userId: currentUserId } = await auth();
+  if (!currentUserId) throw new Error('Unauthorized');
+
+  const { listShares } = await import('@/db/schema');
+
+  await db.insert(listShares).values({
+    listId,
+    sharedWithEmail: email.toLowerCase().trim()
+  });
+
+  revalidatePath(`/lists/${listId}`);
 }
 
 export async function deleteListAction(id: string) {

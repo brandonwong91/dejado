@@ -18,8 +18,11 @@ import {
   LinkIcon,
   PlusIcon,
   Trash2Icon,
-  ClipboardIcon
+  ClipboardIcon,
+  GlobeIcon,
+  ExternalLinkIcon
 } from 'lucide-react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   createListAction,
@@ -43,6 +46,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 interface List {
   id: string;
   name: string;
+  isPublic: string;
 }
 
 interface ListItem {
@@ -343,13 +347,25 @@ function ListCard({
               className='h-8 w-full text-sm font-bold'
             />
           ) : (
-            <h3
-              className='cursor-pointer truncate pl-1 text-sm font-bold hover:underline'
-              onClick={() => setIsEditing(true)}
-              title='Click to edit name'
+            <Link
+              href={`/lists/${list.id}`}
+              className='hover:text-primary flex min-w-0 flex-1 items-center gap-2 transition-colors'
             >
-              {list.name}
-            </h3>
+              <h3
+                className='cursor-pointer truncate pl-1 text-sm font-bold hover:underline'
+                title='View full list'
+              >
+                {list.name}
+              </h3>
+              {list.isPublic === 'true' && (
+                <Badge
+                  variant='outline'
+                  className='h-4 gap-0.5 px-1 text-[8px] opacity-70'
+                >
+                  <GlobeIcon className='size-2' /> Public
+                </Badge>
+              )}
+            </Link>
           )}
         </div>
         <Button

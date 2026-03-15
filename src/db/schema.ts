@@ -105,8 +105,18 @@ export const lists = pgTable('lists', {
   userId: text('user_id').notNull(),
   name: text('name').notNull(),
   description: text('description'),
+  isPublic: text('is_public').default('false').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
+export const listShares = pgTable('list_shares', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  listId: uuid('list_id')
+    .references(() => lists.id, { onDelete: 'cascade' })
+    .notNull(),
+  sharedWithEmail: text('shared_with_email').notNull(), // email of the user to share with
+  createdAt: timestamp('created_at').defaultNow().notNull()
 });
 
 export const listItems = pgTable('list_items', {
