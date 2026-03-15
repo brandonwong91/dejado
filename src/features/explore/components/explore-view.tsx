@@ -47,30 +47,30 @@ export function ExploreView({
     <div className='space-y-8 pb-10'>
       <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
         <div>
-          <h2 className='text-3xl font-bold tracking-tight'>
+          <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
             Explore Public Lists
           </h2>
-          <p className='text-muted-foreground'>
+          <p className='text-muted-foreground text-sm md:text-base'>
             Browse and discover curated links shared by the community.
           </p>
         </div>
         {!userId && (
           <div className='flex items-center gap-2'>
-            <Button variant='outline' asChild>
+            <Button variant='outline' size='sm' asChild>
               <Link href='/auth/sign-in'>Sign In</Link>
             </Button>
-            <Button asChild>
+            <Button size='sm' asChild>
               <Link href='/auth/sign-up'>Get Started</Link>
             </Button>
           </div>
         )}
       </div>
 
-      <div className='relative max-w-md'>
+      <div className='relative w-full max-w-md'>
         <SearchIcon className='text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2' />
         <Input
           placeholder='Search lists...'
-          className='pl-10'
+          className='h-12 pl-10'
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -84,7 +84,7 @@ export function ExploreView({
           </p>
         </div>
       ) : (
-        <div className='grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
+        <div className='grid w-full min-w-0 grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
           {filteredLists.map((list) => (
             <Card
               key={list.id}
