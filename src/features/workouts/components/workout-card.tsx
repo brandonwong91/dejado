@@ -17,8 +17,10 @@ import { deleteWorkoutAction } from '../actions';
 import { toast } from 'sonner';
 import { ExerciseDialog } from '@/features/workouts/components/exercise-dialog';
 import { WorkoutDialog } from '@/features/workouts/components/workout-dialog';
-import { WorkoutSessionDialog } from '@/features/workouts/components/workout-session-dialog';
 import { formatDistanceToNow } from 'date-fns';
+import { useRouter } from 'next/navigation';
+import { startWorkoutSessionAction } from '../actions';
+import { useState } from 'react';
 
 interface Exercise {
   id: string;
@@ -54,6 +56,8 @@ export function WorkoutCard({
   workoutExercises,
   sessions
 }: WorkoutCardProps) {
+  const router = useRouter();
+  const [isStarting, setIsStarting] = useState(false);
   const DAY_ORDER = [
     'Monday',
     'Tuesday',
@@ -98,6 +102,20 @@ export function WorkoutCard({
     }
   }
 
+  async function handleStartWorkout() {
+    try {
+      setIsStarting(true);
+      const sessionId = await startWorkoutSessionAction(
+        workout.id,
+        workout.name
+      );
+      router.push(`/workouts/session/${sessionId}`);
+    } catch (error) {
+      toast.error('Failed to start workout');
+      setIsStarting(false);
+    }
+  }
+
   return (
     <Card className='group border-l-primary overflow-hidden border-l-4 transition-all hover:shadow-md'>
       <div className='flex flex-col md:flex-row'>
@@ -105,8 +123,7 @@ export function WorkoutCard({
           <div>
             <div className='flex items-start justify-between'>
               <div>
-                <div className='mb-1 flex items-center gap-2'>
-                  <h3 className='text-xl font-bold'>{workout.name}</h3>
+                <div className='mb-1 flex flex-col items-start gap-2'>
                   {days.length > 0 && (
                     <div className='flex gap-1'>
                       {days.map((day) => (
@@ -120,10 +137,13 @@ export function WorkoutCard({
                       ))}
                     </div>
                   )}
+                  <h3 className='text-xl font-bold'>{workout.name}</h3>
                 </div>
-                <p className='text-muted-foreground line-clamp-2 text-sm'>
-                  {workout.description || 'No description provided.'}
-                </p>
+                {workout.description && (
+                  <p className='text-muted-foreground line-clamp-2 text-sm'>
+                    {workout.description}
+                  </p>
+                )}
               </div>
 
               <div className='flex items-center gap-1'>
@@ -220,12 +240,15 @@ export function WorkoutCard({
         </div>
 
         <div className='bg-muted/30 flex min-w-[200px] items-center justify-center border-t p-6 md:border-t-0 md:border-l'>
-          <WorkoutSessionDialog workout={workout} exercises={allExercises}>
-            <Button className='w-full gap-2 py-6 font-black' size='lg'>
-              <PlayIcon className='size-5 fill-current' />
-              START WORKOUT
-            </Button>
-          </WorkoutSessionDialog>
+          <Button
+            className='w-full gap-2 py-6 font-black'
+            size='lg'
+            onClick={handleStartWorkout}
+            disabled={isStarting}
+          >
+            <PlayIcon className='size-5 fill-current' />
+            {isStarting ? 'STARTING...' : 'START WORKOUT'}
+          </Button>
         </div>
       </div>
     </Card>
