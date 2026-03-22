@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Card,
   CardHeader,
@@ -6,65 +6,65 @@ import {
   CardTitle,
   CardDescription
 } from '@/components/ui/card';
+import { RecentActivity } from '../server/actions';
+import {
+  IconActivity,
+  IconCreditCard,
+  IconShoppingCart,
+  IconListCheck
+} from '@tabler/icons-react';
+import { formatDistanceToNow } from 'date-fns';
 
-const salesData = [
-  {
-    name: 'Olivia Martin',
-    email: 'olivia.martin@email.com',
-    avatar: 'https://api.slingacademy.com/public/sample-users/1.png',
-    fallback: 'OM',
-    amount: '+$1,999.00'
-  },
-  {
-    name: 'Jackson Lee',
-    email: 'jackson.lee@email.com',
-    avatar: 'https://api.slingacademy.com/public/sample-users/2.png',
-    fallback: 'JL',
-    amount: '+$39.00'
-  },
-  {
-    name: 'Isabella Nguyen',
-    email: 'isabella.nguyen@email.com',
-    avatar: 'https://api.slingacademy.com/public/sample-users/3.png',
-    fallback: 'IN',
-    amount: '+$299.00'
-  },
-  {
-    name: 'William Kim',
-    email: 'will@email.com',
-    avatar: 'https://api.slingacademy.com/public/sample-users/4.png',
-    fallback: 'WK',
-    amount: '+$99.00'
-  },
-  {
-    name: 'Sofia Davis',
-    email: 'sofia.davis@email.com',
-    avatar: 'https://api.slingacademy.com/public/sample-users/5.png',
-    fallback: 'SD',
-    amount: '+$39.00'
-  }
-];
-
-export function RecentSales() {
+export function RecentSales({ activities }: { activities: RecentActivity[] }) {
   return (
     <Card className='h-full'>
       <CardHeader>
-        <CardTitle>Recent Sales</CardTitle>
-        <CardDescription>You made 265 sales this month.</CardDescription>
+        <CardTitle>Recent Activity</CardTitle>
+        <CardDescription>Latest updates across your features.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className='space-y-8'>
-          {salesData.map((sale, index) => (
-            <div key={index} className='flex items-center'>
+          {activities.length === 0 && (
+            <p className='text-muted-foreground text-sm'>
+              No recent activity found.
+            </p>
+          )}
+          {activities.map((activity) => (
+            <div key={activity.id} className='flex items-center'>
               <Avatar className='h-9 w-9'>
-                <AvatarImage src={sale.avatar} alt='Avatar' />
-                <AvatarFallback>{sale.fallback}</AvatarFallback>
+                <AvatarFallback
+                  className={
+                    activity.type === 'workout'
+                      ? 'bg-blue-100 text-blue-600'
+                      : activity.type === 'payment'
+                        ? 'bg-green-100 text-green-600'
+                        : activity.type === 'purchase'
+                          ? 'bg-amber-100 text-amber-600'
+                          : 'bg-purple-100 text-purple-600'
+                  }
+                >
+                  {activity.type === 'workout' && <IconActivity size={18} />}
+                  {activity.type === 'payment' && <IconCreditCard size={18} />}
+                  {activity.type === 'purchase' && (
+                    <IconShoppingCart size={18} />
+                  )}
+                  {activity.type === 'list_item' && <IconListCheck size={18} />}
+                </AvatarFallback>
               </Avatar>
-              <div className='ml-4 space-y-1'>
-                <p className='text-sm leading-none font-medium'>{sale.name}</p>
-                <p className='text-muted-foreground text-sm'>{sale.email}</p>
+              <div className='ml-4 space-y-1 overflow-hidden'>
+                <p className='truncate text-sm leading-none font-medium'>
+                  {activity.title}
+                </p>
+                <p className='text-muted-foreground text-xs'>
+                  {activity.description} •{' '}
+                  {formatDistanceToNow(new Date(activity.date), {
+                    addSuffix: true
+                  })}
+                </p>
               </div>
-              <div className='ml-auto font-medium'>{sale.amount}</div>
+              <div className='ml-auto text-sm font-medium'>
+                {activity.amount}
+              </div>
             </div>
           ))}
         </div>

@@ -1,7 +1,7 @@
-import { delay } from '@/constants/mock-api';
 import { RecentSales } from '@/features/overview/components/recent-sales';
+import { getDashboardMetrics } from '@/features/overview/server/actions';
 
 export default async function Sales() {
-  await delay(3000);
-  return <RecentSales />;
+  const metrics = await getDashboardMetrics();
+  return <RecentSales activities={metrics.recentActivities} />;
 }

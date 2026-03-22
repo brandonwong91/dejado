@@ -8,10 +8,18 @@ import {
   CardAction,
   CardFooter
 } from '@/components/ui/card';
-import { IconTrendingDown, IconTrendingUp } from '@tabler/icons-react';
+import { getDashboardMetrics } from '@/features/overview/server/actions';
+import {
+  IconCreditCard,
+  IconListCheck,
+  IconActivity,
+  IconShoppingCart,
+  IconCalendarEvent
+} from '@tabler/icons-react';
 import React from 'react';
+import { formatDistanceToNow } from 'date-fns';
 
-export default function OverViewLayout({
+export default async function OverViewLayout({
   sales,
   pie_stats,
   bar_stats,
@@ -22,6 +30,8 @@ export default function OverViewLayout({
   bar_stats: React.ReactNode;
   area_stats: React.ReactNode;
 }) {
+  const metrics = await getDashboardMetrics();
+
   return (
     <PageContainer>
       <div className='flex flex-1 flex-col space-y-2'>
@@ -32,96 +42,101 @@ export default function OverViewLayout({
         </div>
 
         <div className='*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs md:grid-cols-2 lg:grid-cols-4'>
+          {/* Purchases Card */}
           <Card className='@container/card'>
-            <CardHeader>
-              <CardDescription>Total Revenue</CardDescription>
+            <CardHeader className='pb-2'>
+              <div className='flex items-center justify-between'>
+                <CardDescription>Purchases</CardDescription>
+                <IconShoppingCart className='text-muted-foreground size-4' />
+              </div>
               <CardTitle className='text-2xl font-semibold tabular-nums @[250px]/card:text-3xl'>
-                $1,250.00
+                {metrics.purchases.total}
               </CardTitle>
               <CardAction>
-                <Badge variant='outline'>
-                  <IconTrendingUp />
-                  +12.5%
-                </Badge>
+                {metrics.purchases.pending > 0 && (
+                  <Badge variant='destructive' className='animate-pulse'>
+                    {metrics.purchases.pending} Pending
+                  </Badge>
+                )}
               </CardAction>
             </CardHeader>
-            <CardFooter className='flex-col items-start gap-1.5 text-sm'>
-              <div className='line-clamp-1 flex gap-2 font-medium'>
-                Trending up this month <IconTrendingUp className='size-4' />
-              </div>
-              <div className='text-muted-foreground'>
-                Visitors for the last 6 months
-              </div>
+            <CardFooter className='text-muted-foreground text-xs'>
+              {metrics.purchases.total > 0
+                ? `${(((metrics.purchases.total - metrics.purchases.pending) / metrics.purchases.total) * 100).toFixed(0)}% completion rate`
+                : 'No purchases yet'}
             </CardFooter>
           </Card>
+
+          {/* Payments Card */}
           <Card className='@container/card'>
-            <CardHeader>
-              <CardDescription>New Customers</CardDescription>
+            <CardHeader className='pb-2'>
+              <div className='flex items-center justify-between'>
+                <CardDescription>Payments</CardDescription>
+                <IconCreditCard className='text-muted-foreground size-4' />
+              </div>
               <CardTitle className='text-2xl font-semibold tabular-nums @[250px]/card:text-3xl'>
-                1,234
+                ${metrics.payments.totalAmount.toLocaleString()}
               </CardTitle>
               <CardAction>
-                <Badge variant='outline'>
-                  <IconTrendingDown />
-                  -20%
-                </Badge>
+                {metrics.payments.pendingCount > 0 && (
+                  <Badge
+                    variant='outline'
+                    className='border-amber-500 text-amber-500'
+                  >
+                    {metrics.payments.pendingCount} Unpaid
+                  </Badge>
+                )}
               </CardAction>
             </CardHeader>
-            <CardFooter className='flex-col items-start gap-1.5 text-sm'>
-              <div className='line-clamp-1 flex gap-2 font-medium'>
-                Down 20% this period <IconTrendingDown className='size-4' />
-              </div>
-              <div className='text-muted-foreground'>
-                Acquisition needs attention
-              </div>
+            <CardFooter className='text-muted-foreground text-xs'>
+              Tracked payments across all categories
             </CardFooter>
           </Card>
+
+          {/* Workouts Card */}
           <Card className='@container/card'>
-            <CardHeader>
-              <CardDescription>Active Accounts</CardDescription>
+            <CardHeader className='pb-2'>
+              <div className='flex items-center justify-between'>
+                <CardDescription>Workouts</CardDescription>
+                <IconActivity className='text-muted-foreground size-4' />
+              </div>
               <CardTitle className='text-2xl font-semibold tabular-nums @[250px]/card:text-3xl'>
-                45,678
+                {metrics.workouts.totalSessions}
               </CardTitle>
               <CardAction>
-                <Badge variant='outline'>
-                  <IconTrendingUp />
-                  +12.5%
+                <Badge variant='secondary'>
+                  {metrics.workouts.totalExercises} Exercises
                 </Badge>
               </CardAction>
             </CardHeader>
-            <CardFooter className='flex-col items-start gap-1.5 text-sm'>
-              <div className='line-clamp-1 flex gap-2 font-medium'>
-                Strong user retention <IconTrendingUp className='size-4' />
-              </div>
-              <div className='text-muted-foreground'>
-                Engagement exceed targets
-              </div>
+            <CardFooter className='text-muted-foreground flex gap-1 text-xs'>
+              <IconCalendarEvent className='size-3' />
+              {metrics.workouts.lastSessionAt
+                ? `Last session ${formatDistanceToNow(new Date(metrics.workouts.lastSessionAt), { addSuffix: true })}`
+                : 'No sessions yet'}
             </CardFooter>
           </Card>
+
+          {/* Lists Card */}
           <Card className='@container/card'>
-            <CardHeader>
-              <CardDescription>Growth Rate</CardDescription>
+            <CardHeader className='pb-2'>
+              <div className='flex items-center justify-between'>
+                <CardDescription>Lists & Assets</CardDescription>
+                <IconListCheck className='text-muted-foreground size-4' />
+              </div>
               <CardTitle className='text-2xl font-semibold tabular-nums @[250px]/card:text-3xl'>
-                4.5%
+                {metrics.lists.totalItems}
               </CardTitle>
               <CardAction>
-                <Badge variant='outline'>
-                  <IconTrendingUp />
-                  +4.5%
-                </Badge>
+                <Badge variant='outline'>{metrics.lists.total} Lists</Badge>
               </CardAction>
             </CardHeader>
-            <CardFooter className='flex-col items-start gap-1.5 text-sm'>
-              <div className='line-clamp-1 flex gap-2 font-medium'>
-                Steady performance increase{' '}
-                <IconTrendingUp className='size-4' />
-              </div>
-              <div className='text-muted-foreground'>
-                Meets growth projections
-              </div>
+            <CardFooter className='text-muted-foreground text-xs'>
+              Resources and items collected
             </CardFooter>
           </Card>
         </div>
+
         <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-7'>
           <div className='col-span-4'>{bar_stats}</div>
           <div className='col-span-4 md:col-span-3'>
