@@ -20,7 +20,9 @@ import {
   Trash2Icon,
   ClipboardIcon,
   GlobeIcon,
-  ExternalLinkIcon
+  ExternalLinkIcon,
+  SparklesIcon,
+  Loader2Icon
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -31,7 +33,8 @@ import {
   deleteListItemAction,
   updateListItemAction,
   updateListAction,
-  toggleListItemCompletionAction
+  toggleListItemCompletionAction,
+  suggestLinkTitleAction
 } from '../actions';
 import {
   Dialog,
@@ -69,8 +72,10 @@ function ListsViewInner({
   const searchParams = useSearchParams();
   const [activeListId, setActiveListId] = useState<string>(lists[0]?.id || '');
   const [urlInput, setUrlInput] = useState('');
+  const [titleInput, setTitleInput] = useState('');
   const [isAddingList, setIsAddingList] = useState(false);
   const [newListName, setNewListName] = useState('');
+  const [isSuggesting, setIsSuggesting] = useState(false);
 
   useEffect(() => {
     const sharedText = searchParams.get('text');
@@ -103,6 +108,20 @@ function ListsViewInner({
     }
   };
 
+  const handleSuggestTitle = async (url: string) => {
+    if (!url.trim()) return;
+    setIsSuggesting(true);
+    try {
+      const suggestion = await suggestLinkTitleAction(url);
+      setTitleInput(suggestion);
+      toast.success('Suggested a name!');
+    } catch (e) {
+      toast.error('Failed to suggest name');
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
   const handleAddLink = async () => {
     if (!urlInput.trim()) return;
     if (!activeListId) {
@@ -111,11 +130,28 @@ function ListsViewInner({
     }
 
     try {
+      let finalTitle = titleInput.trim();
+
+      // Auto-suggest if empty
+      if (!finalTitle) {
+        setIsSuggesting(true);
+        try {
+          finalTitle = await suggestLinkTitleAction(urlInput);
+          toast.success(`Using AI suggested name: ${finalTitle}`);
+        } catch (e) {
+          // Fallback handled by server
+        } finally {
+          setIsSuggesting(false);
+        }
+      }
+
       await createListItemAction({
         listId: activeListId,
-        url: urlInput
+        url: urlInput,
+        title: finalTitle || undefined
       });
       setUrlInput('');
+      setTitleInput('');
       toast.success('Link added');
     } catch (error) {
       toast.error('Failed to add link');
@@ -181,55 +217,116 @@ function ListsViewInner({
         </div>
       </div>
 
-      <div className='bg-card w-full min-w-0 rounded-xl border p-4 shadow-sm'>
-        <div className='flex flex-col gap-4 md:flex-row md:items-center'>
-          <div className='flex flex-1 gap-2'>
-            <div className='relative min-w-0 flex-1'>
-              <Input
-                placeholder='Paste a link here (https://...)'
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                className='h-12 pl-10'
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleAddLink();
-                }}
-              />
-              <LinkIcon className='text-muted-foreground absolute top-1/2 left-3 size-5 -translate-y-1/2' />
+      <div className='mx-auto w-full max-w-xl'>
+        <Card className='border-primary/10 overflow-hidden border-2 shadow-lg transition-all hover:shadow-xl'>
+          <CardContent className='p-6'>
+            <div className='flex flex-col gap-6'>
+              <div className='flex items-center gap-2'>
+                <div className='bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-lg'>
+                  <PlusIcon className='size-5' />
+                </div>
+                <h3 className='text-lg font-bold'>Add New Link</h3>
+              </div>
+
+              <div className='grid grid-cols-1 gap-6'>
+                {/* URL and Paste Row */}
+                <div className='space-y-2'>
+                  <label className='text-muted-foreground px-1 text-xs font-bold tracking-wider uppercase'>
+                    Link URL
+                  </label>
+                  <div className='flex gap-2'>
+                    <div className='relative min-w-0 flex-1'>
+                      <Input
+                        placeholder='Paste a link here (https://...)'
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        className='bg-muted/30 focus-visible:bg-background h-12 pl-10 transition-colors'
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddLink();
+                        }}
+                      />
+                      <LinkIcon className='text-muted-foreground absolute top-1/2 left-3 size-5 -translate-y-1/2' />
+                    </div>
+                    <Button
+                      variant='outline'
+                      size='icon'
+                      className='border-primary/20 hover:border-primary/50 h-12 w-12 shrink-0 transition-all'
+                      onClick={handlePasteClipboard}
+                      title='Paste from clipboard'
+                    >
+                      <ClipboardIcon className='size-5' />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Display Name with AI Suggest */}
+                <div className='space-y-2'>
+                  <label className='text-muted-foreground px-1 text-xs font-bold tracking-wider uppercase'>
+                    Display Name (Optional)
+                  </label>
+                  <div className='relative'>
+                    <Input
+                      placeholder='Give this link a name'
+                      value={titleInput}
+                      onChange={(e) => setTitleInput(e.target.value)}
+                      className='bg-muted/30 focus-visible:bg-background h-12 pr-12 transition-colors'
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddLink();
+                      }}
+                    />
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      type='button'
+                      disabled={isSuggesting || !urlInput.trim()}
+                      onClick={() => handleSuggestTitle(urlInput)}
+                      className='text-primary hover:bg-primary/5 absolute top-1 right-1 h-10 w-10 transition-all'
+                      title='AI Suggest Name'
+                    >
+                      {isSuggesting ? (
+                        <Loader2Icon className='size-5 animate-spin' />
+                      ) : (
+                        <SparklesIcon className='size-5 animate-pulse' />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className='space-y-2'>
+                  <label className='text-muted-foreground px-1 text-xs font-bold tracking-wider uppercase'>
+                    Save to List
+                  </label>
+                  <Select
+                    value={activeListId}
+                    onValueChange={setActiveListId}
+                    disabled={lists.length === 0}
+                  >
+                    <SelectTrigger className='bg-muted/30 focus:bg-background h-12 w-full transition-colors'>
+                      <SelectValue placeholder='Select a list' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lists.map((list) => (
+                        <SelectItem key={list.id} value={list.id}>
+                          {list.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className='border-t pt-6'>
+                <Button
+                  className='hover:shadow-primary/20 h-12 w-full gap-2 font-bold shadow-md transition-all active:scale-95'
+                  onClick={handleAddLink}
+                  disabled={!urlInput.trim() || !activeListId}
+                >
+                  <PlusIcon className='size-5' /> Save Link
+                </Button>
+              </div>
             </div>
-            <Button
-              variant='outline'
-              size='icon'
-              className='h-12 w-12 shrink-0'
-              onClick={handlePasteClipboard}
-              title='Paste from clipboard'
-            >
-              <ClipboardIcon className='size-5' />
-            </Button>
-          </div>
-          <Select
-            value={activeListId}
-            onValueChange={setActiveListId}
-            disabled={lists.length === 0}
-          >
-            <SelectTrigger className='h-12 w-full md:w-[200px]'>
-              <SelectValue placeholder='Select a list' />
-            </SelectTrigger>
-            <SelectContent>
-              {lists.map((list) => (
-                <SelectItem key={list.id} value={list.id}>
-                  {list.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            className='h-12 w-full shrink-0 gap-2 md:w-auto'
-            onClick={handleAddLink}
-            disabled={!urlInput.trim() || !activeListId}
-          >
-            <PlusIcon className='size-5' /> Save Link
-          </Button>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className='flex items-center justify-between px-1'>

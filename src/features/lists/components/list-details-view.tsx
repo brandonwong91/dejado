@@ -15,16 +15,20 @@ import {
   LockIcon,
   Share2Icon,
   UsersIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  SparklesIcon,
+  Loader2Icon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   createListItemAction,
   deleteListItemAction,
+  updateListItemAction,
   toggleListItemCompletionAction,
   updateListAction,
   toggleListPublicAction,
-  shareListAction
+  shareListAction,
+  suggestLinkTitleAction
 } from '../actions';
 import {
   Dialog,
@@ -99,10 +103,14 @@ export function ListDetailsView({
   shares = []
 }: ListDetailsViewProps) {
   const [urlInput, setUrlInput] = useState('');
+  const [titleInput, setTitleInput] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [name, setName] = useState(list.name);
   const [shareEmail, setShareEmail] = useState('');
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [itemTitleInput, setItemTitleInput] = useState('');
+  const [isSuggesting, setIsSuggesting] = useState(false);
 
   const handleUpdateName = async () => {
     if (name.trim() !== list.name && name.trim()) {
@@ -117,14 +125,67 @@ export function ListDetailsView({
     setIsEditingName(false);
   };
 
+  const handleUpdateItemTitle = async (
+    itemId: string,
+    originalItem: ListItem
+  ) => {
+    if (itemTitleInput.trim() !== originalItem.title && itemTitleInput.trim()) {
+      try {
+        await updateListItemAction(itemId, { title: itemTitleInput.trim() });
+        toast.success('Link name updated');
+      } catch {
+        toast.error('Failed to update link name');
+      }
+    }
+    setEditingItemId(null);
+  };
+
+  const handleSuggestTitle = async (
+    url: string,
+    isCreateMode: boolean = true
+  ) => {
+    if (!url.trim()) return;
+    setIsSuggesting(true);
+    try {
+      const suggestion = await suggestLinkTitleAction(url);
+      if (isCreateMode) {
+        setTitleInput(suggestion);
+      } else {
+        setItemTitleInput(suggestion);
+      }
+      toast.success('Suggested a name!');
+    } catch (e) {
+      toast.error('Failed to suggest name');
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
   const handleAddLink = async () => {
     if (!urlInput.trim()) return;
     try {
+      let finalTitle = titleInput.trim();
+
+      // Auto-suggest if empty
+      if (!finalTitle) {
+        setIsSuggesting(true);
+        try {
+          finalTitle = await suggestLinkTitleAction(urlInput);
+          toast.success(`Using AI suggested name: ${finalTitle}`);
+        } catch (e) {
+          // If suggestion fails, fallback will be handled by the server (uses URL)
+        } finally {
+          setIsSuggesting(false);
+        }
+      }
+
       await createListItemAction({
         listId: list.id,
-        url: urlInput
+        url: urlInput,
+        title: finalTitle || undefined
       });
       setUrlInput('');
+      setTitleInput('');
       toast.success('Link added');
     } catch (error) {
       toast.error('Failed to add link');
@@ -369,40 +430,95 @@ export function ListDetailsView({
       </div>
 
       {isOwner && (
-        <Card className='w-full overflow-hidden border-dashed'>
-          <CardContent className='p-4 pt-4'>
-            <div className='flex flex-col gap-4 md:flex-row md:items-center'>
-              <div className='flex min-w-0 flex-1 gap-2'>
-                <div className='relative min-w-0 flex-1'>
-                  <Input
-                    placeholder='Add a new link (https://...)'
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    className='h-12 w-full pl-10'
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddLink()}
-                  />
-                  <LinkIcon className='text-muted-foreground absolute top-1/2 left-3 size-5 -translate-y-1/2' />
+        <div className='mx-auto w-full max-w-xl'>
+          <Card className='border-primary/10 overflow-hidden border-2 shadow-lg transition-all hover:shadow-xl'>
+            <CardContent className='p-6'>
+              <div className='flex flex-col gap-6'>
+                <div className='flex items-center gap-2'>
+                  <div className='bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-lg'>
+                    <PlusIcon className='size-5' />
+                  </div>
+                  <h3 className='text-lg font-bold'>Add New Link</h3>
                 </div>
-                <Button
-                  variant='outline'
-                  size='icon'
-                  className='h-12 w-12 shrink-0'
-                  onClick={handlePasteClipboard}
-                  title='Paste from clipboard'
-                >
-                  <ClipboardIcon className='size-5' />
-                </Button>
+
+                <div className='grid grid-cols-1 gap-6'>
+                  {/* URL and Paste Row */}
+                  <div className='space-y-2'>
+                    <label className='text-muted-foreground px-1 text-xs font-bold tracking-wider uppercase'>
+                      Link URL
+                    </label>
+                    <div className='flex gap-2'>
+                      <div className='relative min-w-0 flex-1'>
+                        <Input
+                          placeholder='Paste a link here (https://...)'
+                          value={urlInput}
+                          onChange={(e) => setUrlInput(e.target.value)}
+                          className='bg-muted/30 focus-visible:bg-background h-12 pl-10 transition-colors'
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleAddLink();
+                          }}
+                        />
+                        <LinkIcon className='text-muted-foreground absolute top-1/2 left-3 size-5 -translate-y-1/2' />
+                      </div>
+                      <Button
+                        variant='outline'
+                        size='icon'
+                        className='border-primary/20 hover:border-primary/50 h-12 w-12 shrink-0 transition-all'
+                        onClick={handlePasteClipboard}
+                        title='Paste from clipboard'
+                      >
+                        <ClipboardIcon className='size-5' />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Display Name with AI Suggest */}
+                  <div className='space-y-2'>
+                    <label className='text-muted-foreground px-1 text-xs font-bold tracking-wider uppercase'>
+                      Display Name (Optional)
+                    </label>
+                    <div className='relative'>
+                      <Input
+                        placeholder='Give this link a name'
+                        value={titleInput}
+                        onChange={(e) => setTitleInput(e.target.value)}
+                        className='bg-muted/30 focus-visible:bg-background h-12 pr-12 transition-colors'
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddLink();
+                        }}
+                      />
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        type='button'
+                        disabled={isSuggesting || !urlInput.trim()}
+                        onClick={() => handleSuggestTitle(urlInput)}
+                        className='text-primary hover:bg-primary/5 absolute top-1 right-1 h-10 w-10 transition-all'
+                        title='AI Suggest Name'
+                      >
+                        {isSuggesting ? (
+                          <Loader2Icon className='size-5 animate-spin' />
+                        ) : (
+                          <SparklesIcon className='size-5 animate-pulse' />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className='border-t pt-6'>
+                  <Button
+                    className='hover:shadow-primary/20 h-12 w-full gap-2 font-bold shadow-md transition-all active:scale-95'
+                    onClick={handleAddLink}
+                    disabled={!urlInput.trim()}
+                  >
+                    <PlusIcon className='size-5' /> Save Link
+                  </Button>
+                </div>
               </div>
-              <Button
-                className='h-12 w-full shrink-0 gap-2 md:w-auto'
-                onClick={handleAddLink}
-                disabled={!urlInput.trim()}
-              >
-                <PlusIcon className='size-5' /> Save Link
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       <Card className='w-full overflow-hidden'>
@@ -460,19 +576,64 @@ export function ListDetailsView({
                       )}
                     </button>
                     <div className='min-w-0 flex-1 space-y-1 overflow-hidden'>
-                      <a
-                        href={item.url}
-                        target='_blank'
-                        rel='noopener noreferrer'
-                        className={`block max-w-full truncate font-semibold hover:underline sm:text-lg ${
-                          item.isCompleted === 'true'
-                            ? 'text-muted-foreground line-through'
-                            : ''
-                        }`}
-                        title={item.title || item.url}
-                      >
-                        {displayTitle}
-                      </a>
+                      {editingItemId === item.id ? (
+                        <div className='relative flex w-full max-w-md gap-2'>
+                          <Input
+                            value={itemTitleInput}
+                            onChange={(e) => setItemTitleInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter')
+                                handleUpdateItemTitle(item.id, item);
+                              if (e.key === 'Escape') setEditingItemId(null);
+                            }}
+                            autoFocus
+                            className='h-8 w-full pr-10 font-semibold'
+                          />
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            type='button'
+                            disabled={isSuggesting}
+                            onClick={() => handleSuggestTitle(item.url, false)}
+                            onMouseDown={(e) => e.preventDefault()} // Prevent onBlur from closing input
+                            className='text-primary absolute top-0 right-0 h-8 w-8'
+                          >
+                            {isSuggesting ? (
+                              <Loader2Icon className='size-3.5 animate-spin' />
+                            ) : (
+                              <SparklesIcon className='size-3.5' />
+                            )}
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className='flex items-center gap-2 overflow-hidden'>
+                          <a
+                            href={item.url}
+                            target='_blank'
+                            rel='noopener noreferrer'
+                            className={`block max-w-full truncate font-semibold hover:underline sm:text-lg ${
+                              item.isCompleted === 'true'
+                                ? 'text-muted-foreground line-through'
+                                : ''
+                            }`}
+                            title={item.title || item.url}
+                          >
+                            {displayTitle}
+                          </a>
+                          {isOwner && (
+                            <button
+                              onClick={() => {
+                                setEditingItemId(item.id);
+                                setItemTitleInput(item.title || '');
+                              }}
+                              className='bg-muted/50 hover:bg-muted hidden size-6 shrink-0 items-center justify-center rounded-md text-[10px] group-hover:flex'
+                              title='Edit display name'
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
+                      )}
                       <div className='text-muted-foreground flex w-full min-w-0 items-center gap-2 text-sm'>
                         {item.platform && (
                           <Badge

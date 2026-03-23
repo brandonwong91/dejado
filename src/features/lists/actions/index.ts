@@ -103,6 +103,7 @@ export async function createListItemAction(data: {
   });
 
   revalidatePath('/lists');
+  revalidatePath(`/lists/${data.listId}`);
 }
 
 export async function updateListItemAction(
@@ -118,6 +119,10 @@ export async function updateListItemAction(
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
+  const [item] = await db.select().from(listItems).where(eq(listItems.id, id));
+
+  if (!item) throw new Error('Item not found');
+
   await db
     .update(listItems)
     .set({
@@ -127,6 +132,7 @@ export async function updateListItemAction(
     .where(eq(listItems.id, id));
 
   revalidatePath('/lists');
+  revalidatePath(`/lists/${item.listId}`);
 }
 
 export async function deleteListItemAction(id: string) {
@@ -153,6 +159,36 @@ export async function toggleListItemCompletionAction(
     .where(eq(listItems.id, id));
 
   revalidatePath('/lists');
+}
+
+export async function suggestLinkTitleAction(url: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    const prompt = `Extract a suitable, short brand or application name from this URL: ${url}. Respond ONLY with the name itself, no explanation or other text.`;
+    const encodedPrompt = encodeURIComponent(prompt);
+    const apiUrl = `https://gen.pollinations.ai/text/${encodedPrompt}`;
+
+    const headers: Record<string, string> = {};
+    if (process.env.POLLINATIONS_API_KEY) {
+      headers['Authorization'] = `Bearer ${process.env.POLLINATIONS_API_KEY}`;
+    }
+
+    const response = await fetch(apiUrl, { headers });
+    if (!response.ok) throw new Error('Failed to fetch from Pollinations');
+
+    const text = await response.text();
+    // Pollinations can sometimes return a lot of text, we want just a short name.
+    // We'll also trim and sanitize just in case.
+    return text
+      .trim()
+      .replace(/^["']|["']$/g, '')
+      .substring(0, 50);
+  } catch (error) {
+    console.error('Error suggesting title:', error);
+    throw new Error('Failed to suggest title');
+  }
 }
 
 function getPlatformFromUrl(url: string): string {
