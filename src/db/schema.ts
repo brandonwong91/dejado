@@ -133,3 +133,16 @@ export const listItems = pgTable('list_items', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
+
+export const articles = pgTable('articles', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  topic: text('topic'),
+  summary: text('summary'),
+  imageUrl: text('image_url'),
+  isPublic: text('is_public').default('true').notNull(),
+  userId: text('user_id'), // Optional: could be "system" or a specific user
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});

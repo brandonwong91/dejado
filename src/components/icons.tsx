@@ -41,7 +41,8 @@ import {
   IconKey,
   IconBarbell,
   IconList,
-  IconSearch
+  IconSearch,
+  IconNews
 } from '@tabler/icons-react';
 
 export type Icon = React.ComponentType<IconProps>;
@@ -90,5 +91,6 @@ export const Icons = {
   purchase: IconShoppingBag,
   workout: IconBarbell,
   list: IconList,
-  search: IconSearch
+  search: IconSearch,
+  article: IconNews
 };

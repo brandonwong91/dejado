@@ -42,6 +42,14 @@ export const navItems: NavItem[] = [
     items: []
   },
   {
+    title: 'Articles',
+    url: '/articles',
+    icon: 'article',
+    shortcut: ['a', 'r'],
+    isActive: false,
+    items: []
+  },
+  {
     title: 'Payments',
     url: '/payments',
     icon: 'billing',
