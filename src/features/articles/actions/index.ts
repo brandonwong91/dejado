@@ -1,9 +1,9 @@
 'use server';
 
 import { db } from '@/db';
-import { articles } from '@/db/schema';
+import { articles, listItems } from '@/db/schema';
 import { revalidatePath } from 'next/cache';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 
 export interface ArticleData {
   title: string;
@@ -37,7 +37,8 @@ async function callPollinations(prompt: string, jsonMode = false, retries = 2) {
   const body = {
     messages: [{ role: 'user', content: prompt }],
     model: 'openai',
-    jsonMode: jsonMode
+    jsonMode: jsonMode,
+    temperature: 0.8
   };
 
   for (let i = 0; i <= retries; i++) {
@@ -82,17 +83,47 @@ export async function generateArticleAction(customTopic?: string) {
     // 1. Choose a topic (either custom or trending)
     let topic = customTopic;
     if (!topic) {
-      const topicPrompt = `Suggest one highly trending topic in technology, science, or productivity today. Only return the topic name, no explanation.`;
-      topic = (await callPollinations(topicPrompt)).trim();
+      // Fetch some random list items to provide context for the AI
+      const randomItems = await db
+        .select({ title: listItems.title })
+        .from(listItems)
+        .orderBy(sql`RANDOM()`)
+        .limit(10);
+
+      const interests = randomItems
+        .map((item) => item.title)
+        .filter(Boolean)
+        .join(', ');
+
+      let topicPrompt = `Suggest one highly trending topic in technology, science, or productivity today. Only return the topic name, no explanation.`;
+
+      if (interests) {
+        topicPrompt = `Suggest one highly trending topic in technology, science, or productivity today. 
+        Take inspiration from these interests: ${interests}. 
+        Return a specific topic name that would be interesting to someone with these tastes. 
+        Only return the topic name, no explanation.`;
+      }
+
+      const suggestedTopic = await callPollinations(topicPrompt);
+      topic = suggestedTopic.trim();
+
+      // If the model returned an empty string or something went wrong,
+      // check if we have any interest to use as a fallback topic
+      if (!topic && randomItems.length > 0) {
+        topic = randomItems[0].title || 'Technology and Innovation';
+      } else if (!topic) {
+        topic = 'Latest in AI';
+      }
     }
 
     // 2. Generate article content in JSON format
-    const contentPrompt = `Write a compelling article about "${topic}". 
-    The article should be around 500-700 words (about 2-3 minutes of reading time). 
-    Include a catchy title, a short 1-line summary, and the article body.
-    
+    const randomSeed = Math.floor(Math.random() * 1000000);
+    const contentPrompt = `Write a completely unique, compelling article about "${topic}" (Seed: ${randomSeed}). 
     Format the response as a JSON object with fields: "title", "summary", "content".
-    The "content" field should be in Markdown format with good structure (using headings, lists etc).
+    The article should be around 500-700 words (about 2-3 minutes of reading time). 
+    Include a catchy, non-generic title, a punchy 1-line summary, and the article body.
+    Ensure the "content" field is in Markdown format with excellent structure, using headings, lists, and bold text for readability.
+    Avoid clichés and repetitive phrases. 
     Respond ONLY with the raw JSON object, no markdown code blocks.`;
 
     const rawResponse = await callPollinations(contentPrompt, true);
