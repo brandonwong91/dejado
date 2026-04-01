@@ -69,5 +69,5 @@ if (!process.env.NEXT_PUBLIC_SENTRY_DISABLED) {
   });
 }
 
-const nextConfig = withSerwist(configWithPlugins);
+const nextConfig = withSerwist(configWithPlugins as any);
 export default nextConfig;
