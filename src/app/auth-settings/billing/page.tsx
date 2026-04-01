@@ -67,7 +67,7 @@ export default function BillingPage() {
                     <h3 className='mb-2 text-xl font-semibold'>
                       Billing Not Enabled
                     </h3>
-                    <p className='mx-auto max-w-md text-muted-foreground'>
+                    <p className='text-muted-foreground mx-auto max-w-md'>
                       The Pricing Table cannot be rendered because billing is
                       currently disabled in your Clerk configuration.
                     </p>

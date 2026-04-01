@@ -32,7 +32,7 @@ export default function ExclusivePage() {
                   <span className='font-semibold'>Pro</span> plan.
                   <br />
                   Upgrade your subscription in&nbsp;
-                  <a className='underline' href='/dashboard/auth-settings/billing'>
+                  <a className='underline' href='/auth-settings/billing'>
                     Billing &amp; Plans
                   </a>
                   .

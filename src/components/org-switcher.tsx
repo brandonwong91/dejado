@@ -68,10 +68,11 @@ export function OrgSwitcher() {
               <GalleryVerticalEnd className='size-4' />
             </div>
             <div
-              className={`grid flex-1 text-left text-sm leading-tight transition-all duration-200 ease-in-out ${state === 'collapsed'
-                ? 'invisible max-w-0 overflow-hidden opacity-0'
-                : 'visible max-w-full opacity-100'
-                }`}
+              className={`grid flex-1 text-left text-sm leading-tight transition-all duration-200 ease-in-out ${
+                state === 'collapsed'
+                  ? 'invisible max-w-0 overflow-hidden opacity-0'
+                  : 'visible max-w-full opacity-100'
+              }`}
             >
               <span className='truncate font-medium'>Loading...</span>
               <span className='text-muted-foreground truncate text-xs'>
@@ -91,17 +92,18 @@ export function OrgSwitcher() {
         <SidebarMenuItem>
           <SidebarMenuButton
             size='lg'
-            onClick={() => router.push('/dashboard/auth-settings/workspaces')}
+            onClick={() => router.push('/auth-settings/workspaces')}
             className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
           >
             <div className='bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg'>
               <Plus className='size-4' />
             </div>
             <div
-              className={`grid flex-1 text-left text-sm leading-tight transition-all duration-200 ease-in-out ${state === 'collapsed'
-                ? 'invisible max-w-0 overflow-hidden opacity-0'
-                : 'visible max-w-full opacity-100'
-                }`}
+              className={`grid flex-1 text-left text-sm leading-tight transition-all duration-200 ease-in-out ${
+                state === 'collapsed'
+                  ? 'invisible max-w-0 overflow-hidden opacity-0'
+                  : 'visible max-w-full opacity-100'
+              }`}
             >
               <span className='truncate font-medium'>Create organization</span>
               <span className='text-muted-foreground truncate text-xs'>
@@ -109,10 +111,11 @@ export function OrgSwitcher() {
               </span>
             </div>
             <ChevronsUpDown
-              className={`ml-auto transition-all duration-200 ease-in-out ${state === 'collapsed'
-                ? 'invisible max-w-0 opacity-0'
-                : 'visible max-w-full opacity-100'
-                }`}
+              className={`ml-auto transition-all duration-200 ease-in-out ${
+                state === 'collapsed'
+                  ? 'invisible max-w-0 opacity-0'
+                  : 'visible max-w-full opacity-100'
+              }`}
             />
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -139,7 +142,7 @@ export function OrgSwitcher() {
             >
               <div className='bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg'>
                 {displayOrganization.hasImage &&
-                  displayOrganization.imageUrl ? (
+                displayOrganization.imageUrl ? (
                   <Image
                     src={displayOrganization.imageUrl}
                     alt={displayOrganization.name}
@@ -152,10 +155,11 @@ export function OrgSwitcher() {
                 )}
               </div>
               <div
-                className={`grid flex-1 text-left text-sm leading-tight transition-all duration-200 ease-in-out ${state === 'collapsed'
-                  ? 'invisible max-w-0 overflow-hidden opacity-0'
-                  : 'visible max-w-full opacity-100'
-                  }`}
+                className={`grid flex-1 text-left text-sm leading-tight transition-all duration-200 ease-in-out ${
+                  state === 'collapsed'
+                    ? 'invisible max-w-0 overflow-hidden opacity-0'
+                    : 'visible max-w-full opacity-100'
+                }`}
               >
                 <span className='truncate font-medium'>
                   {displayOrganization.name}
@@ -167,10 +171,11 @@ export function OrgSwitcher() {
                 </span>
               </div>
               <ChevronsUpDown
-                className={`ml-auto transition-all duration-200 ease-in-out ${state === 'collapsed'
-                  ? 'invisible max-w-0 opacity-0'
-                  : 'visible max-w-full opacity-100'
-                  }`}
+                className={`ml-auto transition-all duration-200 ease-in-out ${
+                  state === 'collapsed'
+                    ? 'invisible max-w-0 opacity-0'
+                    : 'visible max-w-full opacity-100'
+                }`}
               />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
@@ -195,7 +200,7 @@ export function OrgSwitcher() {
                 >
                   <div className='flex size-6 items-center justify-center overflow-hidden rounded-md border'>
                     {membership.organization.hasImage &&
-                      membership.organization.imageUrl ? (
+                    membership.organization.imageUrl ? (
                       <Image
                         src={membership.organization.imageUrl}
                         alt={membership.organization.name}
@@ -219,7 +224,7 @@ export function OrgSwitcher() {
             <DropdownMenuItem
               className='gap-2 p-2'
               onClick={() => {
-                router.push('/dashboard/auth-settings/workspaces');
+                router.push('/auth-settings/workspaces');
               }}
             >
               <div className='flex size-6 items-center justify-center rounded-md border bg-transparent'>

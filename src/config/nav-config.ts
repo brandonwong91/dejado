@@ -127,27 +127,27 @@ export const navItems: NavItem[] = [
     items: [
       {
         title: 'Workspaces',
-        url: '/dashboard/auth-settings/workspaces',
+        url: '/auth-settings/workspaces',
         icon: 'workspace',
         shortcut: ['w', 's']
       },
       {
         title: 'Teams',
-        url: '/dashboard/auth-settings/workspaces/team',
+        url: '/auth-settings/workspaces/team',
         icon: 'teams',
         shortcut: ['t', 'm'],
         access: { requireOrg: true }
       },
       {
         title: 'Billing',
-        url: '/dashboard/auth-settings/billing',
+        url: '/auth-settings/billing',
         icon: 'billing',
         shortcut: ['b', 'b'],
         access: { requireOrg: true }
       },
       {
         title: 'Profile',
-        url: '/dashboard/auth-settings/profile',
+        url: '/auth-settings/profile',
         icon: 'profile',
         shortcut: ['p', 'r']
       }

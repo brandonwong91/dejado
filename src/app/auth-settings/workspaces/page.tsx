@@ -28,8 +28,8 @@ export default function WorkspacesPage() {
                 'text-sm text-muted-foreground'
             }
           }}
-          afterSelectOrganizationUrl='/dashboard/auth-settings/workspaces/team'
-          afterCreateOrganizationUrl='/dashboard/auth-settings/workspaces/team'
+          afterSelectOrganizationUrl='/auth-settings/workspaces/team'
+          afterCreateOrganizationUrl='/auth-settings/workspaces/team'
         />
       </div>
     </PageContainer>

@@ -53,33 +53,31 @@ export function UserNav() {
           <DropdownMenuGroup>
             <DropdownMenuItem
               className='cursor-pointer'
-              onClick={() => router.push('/dashboard/auth-settings/workspaces')}
+              onClick={() => router.push('/auth-settings/profile')}
             >
-              <SettingsIcon className='mr-2 h-4 w-4' />
-              Workspaces
+              <UserIcon className='mr-2 h-4 w-4' />
+              Profile
             </DropdownMenuItem>
             <DropdownMenuItem
               className='cursor-pointer'
-              onClick={() =>
-                router.push('/dashboard/auth-settings/workspaces/team')
-              }
+              onClick={() => router.push('/auth-settings/workspaces/team')}
             >
               <UsersIcon className='mr-2 h-4 w-4' />
               Teams
             </DropdownMenuItem>
             <DropdownMenuItem
               className='cursor-pointer'
-              onClick={() => router.push('/dashboard/auth-settings/billing')}
+              onClick={() => router.push('/auth-settings/billing')}
             >
               <CreditCardIcon className='mr-2 h-4 w-4' />
               Billing
             </DropdownMenuItem>
             <DropdownMenuItem
               className='cursor-pointer'
-              onClick={() => router.push('/dashboard/auth-settings/profile')}
+              onClick={() => router.push('/auth-settings/workspaces')}
             >
-              <UserIcon className='mr-2 h-4 w-4' />
-              Profile
+              <SettingsIcon className='mr-2 h-4 w-4' />
+              Workspaces
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
