@@ -58,7 +58,7 @@ export default async function OverViewLayout({
         </div>
 
         {/* Improved Articles Hero Section */}
-        <section className='from-primary/10 via-background to-primary/5 border-primary/20 dark:border-primary/5 relative overflow-hidden rounded-3xl border bg-gradient-to-br p-6 shadow-xl lg:p-8'>
+        <section className='from-primary/10 via-background to-primary/5 border-primary/20 dark:border-primary/5 relative overflow-hidden rounded-xl border bg-gradient-to-br p-6 shadow-xl lg:p-8'>
           <div className='relative z-10 grid gap-8 lg:grid-cols-2 lg:items-center'>
             <div className='space-y-4'>
               <div className='flex items-center gap-2'>
@@ -112,7 +112,7 @@ export default async function OverViewLayout({
             </div>
 
             <div className='hidden lg:block'>
-              <div className='bg-primary/5 border-primary/10 relative ml-auto flex max-w-sm flex-col gap-4 rounded-2xl border p-6 shadow-inner backdrop-blur-md'>
+              <div className='bg-primary/5 border-primary/10 relative ml-auto flex max-w-sm flex-col gap-4 rounded-xl border p-6 shadow-inner backdrop-blur-md'>
                 <NewspaperIcon className='text-primary position-absolute -top-4 -right-4 size-20 opacity-10' />
                 <div className='space-y-4'>
                   <div className='text-muted-foreground text-xs font-bold tracking-wider uppercase'>
