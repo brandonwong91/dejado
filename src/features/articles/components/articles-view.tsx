@@ -21,13 +21,21 @@ import {
   ArrowRightIcon,
   NewspaperIcon,
   SearchIcon,
-  TrendingUpIcon
+  TrendingUpIcon,
+  GlobeIcon,
+  LockIcon,
+  XIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useUser } from '@clerk/nextjs';
 import {
   generateArticleAction,
   deleteArticleAction,
-  getArticlesAction
+  getArticlesAction,
+  toggleArticlePublicAction,
+  addInterestAction,
+  deleteInterestAction,
+  getGlobalTrendingTopicsAction
 } from '../actions';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
@@ -50,19 +58,44 @@ interface Article {
   topic: string | null;
   imageUrl: string | null;
   isPublic: string;
+  userId: string | null;
   createdAt: Date;
+  updatedAt: Date;
+}
+
+interface UserInterest {
+  id: string;
+  name: string;
 }
 
 interface ArticlesViewProps {
   initialArticles: Article[];
+  initialTopics: string[];
+  initialInterests: UserInterest[];
 }
 
-export function ArticlesView({ initialArticles }: ArticlesViewProps) {
+export function ArticlesView({
+  initialArticles,
+  initialTopics,
+  initialInterests
+}: ArticlesViewProps) {
+  const { user } = useUser();
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [isGenerating, setIsGenerating] = useState(false);
   const [searchTopic, setSearchTopic] = useState('');
+  const [personalTopics, setPersonalTopics] = useState<string[]>(initialTopics);
+  const [managedInterests, setManagedInterests] = useState<UserInterest[]>(
+    initialInterests || []
+  );
+  const [newInterestInput, setNewInterestInput] = useState('');
+  const [isAddingInterest, setIsAddingInterest] = useState(false);
+  const [globalTrends, setGlobalTrends] = useState<string[]>([]);
+  const [isFetchingTrends, setIsFetchingTrends] = useState(false);
 
-  const handleGenerateArticle = async (selectedTopic?: string) => {
+  const handleGenerateArticle = async (
+    selectedTopic?: string,
+    isPersonal = false
+  ) => {
     const topicToUse = selectedTopic || searchTopic;
     setIsGenerating(true);
     const toastId = toast.loading(
@@ -71,10 +104,16 @@ export function ArticlesView({ initialArticles }: ArticlesViewProps) {
         : 'Generating a new article from trending topics...'
     );
     try {
-      const newArticle = await generateArticleAction(topicToUse);
+      // If it's a personal topic, generate it as private
+      const newArticle = await generateArticleAction(topicToUse, isPersonal);
       setArticles((prev) => [newArticle, ...prev]);
       setSearchTopic('');
-      toast.success('Successfully generated a new article!', { id: toastId });
+      toast.success(
+        isPersonal
+          ? 'Successfully generated a private article!'
+          : 'Successfully generated a new article!',
+        { id: toastId }
+      );
     } catch (e) {
       toast.error('Failed to generate article. Please try again.', {
         id: toastId
@@ -111,6 +150,60 @@ export function ArticlesView({ initialArticles }: ArticlesViewProps) {
     }
   };
 
+  const handleTogglePublic = async (id: string, isPublic: boolean) => {
+    try {
+      await toggleArticlePublicAction(id, isPublic);
+      setArticles((prev) =>
+        prev.map((a) =>
+          a.id === id ? { ...a, isPublic: isPublic ? 'true' : 'false' } : a
+        )
+      );
+      toast.success(isPublic ? 'Article published!' : 'Article made private');
+    } catch (e) {
+      toast.error('Failed to update article visibility');
+    }
+  };
+
+  const handleAddInterest = async () => {
+    if (!newInterestInput.trim()) return;
+    setIsAddingInterest(true);
+    try {
+      const interest = await addInterestAction(newInterestInput.trim());
+      setManagedInterests((prev) => [interest, ...prev]);
+      setNewInterestInput('');
+      toast.success('Interest added');
+    } catch (e) {
+      toast.error('Failed to add interest');
+    } finally {
+      setIsAddingInterest(false);
+    }
+  };
+
+  const handleDeleteInterest = async (id: string) => {
+    try {
+      await deleteInterestAction(id);
+      setManagedInterests((prev) => prev.filter((i) => i.id !== id));
+      toast.success('Interest removed');
+    } catch (e) {
+      toast.error('Failed to remove interest');
+    }
+  };
+
+  const handleFetchGlobalTrends = async () => {
+    setIsFetchingTrends(true);
+    try {
+      const trends = await getGlobalTrendingTopicsAction();
+      setGlobalTrends(trends);
+      if (trends.length > 0) {
+        toast.success('Found top 3 global trends!');
+      }
+    } catch (e) {
+      toast.error('Failed to fetch trending topics');
+    } finally {
+      setIsFetchingTrends(false);
+    }
+  };
+
   return (
     <div className='mx-auto max-w-6xl space-y-12 pb-20'>
       <div className='flex flex-col gap-8'>
@@ -123,7 +216,6 @@ export function ArticlesView({ initialArticles }: ArticlesViewProps) {
           </p>
         </div>
 
-        {/* Steering Generation UI */}
         <Card className='border-primary/10 bg-muted/20 overflow-hidden border-2 shadow-lg backdrop-blur-sm transition-all'>
           <CardContent className='space-y-6 p-6'>
             <div className='flex flex-col gap-4 md:flex-row'>
@@ -153,34 +245,141 @@ export function ArticlesView({ initialArticles }: ArticlesViewProps) {
                 ) : (
                   <>
                     <SparklesIcon className='size-5 animate-pulse text-yellow-400' />
-                    {searchTopic ? 'Generate Custom' : 'Explore Trending'}
+                    {searchTopic ? 'Generate Custom' : 'Explore Current Trends'}
                   </>
                 )}
               </Button>
             </div>
 
-            <div className='space-y-3'>
-              <div className='text-muted-foreground flex items-center gap-2 text-xs font-bold tracking-[0.2em] uppercase'>
-                <TrendingUpIcon className='size-4' />
-                Popular Suggestions
-              </div>
-              <div className='flex flex-wrap gap-2'>
-                {SUGGESTED_TOPICS.map((topic) => (
-                  <button
-                    key={topic}
-                    onClick={() => handleGenerateArticle(topic)}
-                    disabled={isGenerating}
-                    className='group relative'
-                  >
-                    <Badge
-                      variant='outline'
-                      className='bg-background hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-all'
+            <div className='grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3'>
+              <div className='space-y-3'>
+                <div className='text-muted-foreground flex items-center justify-between text-xs font-bold tracking-[0.2em] uppercase'>
+                  <div className='flex items-center gap-2'>
+                    <TrendingUpIcon className='size-4' />
+                    Your Interests
+                  </div>
+                </div>
+
+                <div className='flex flex-wrap gap-2'>
+                  {managedInterests.map((interest) => (
+                    <div key={interest.id} className='group relative'>
+                      <Badge
+                        variant='outline'
+                        className='bg-background hover:bg-primary/5 border-primary/20 flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-all'
+                      >
+                        <span
+                          className='cursor-pointer'
+                          onClick={() => handleGenerateArticle(interest.name)}
+                        >
+                          {interest.name}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteInterest(interest.id)}
+                          className='text-muted-foreground hover:text-destructive underline decoration-dotted transition-colors'
+                        >
+                          <XIcon className='size-3' />
+                        </button>
+                      </Badge>
+                    </div>
+                  ))}
+
+                  <div className='flex items-center gap-2'>
+                    <Input
+                      placeholder='Add interest...'
+                      value={newInterestInput}
+                      onChange={(e) => setNewInterestInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddInterest();
+                      }}
+                      className='h-9 w-32 text-xs'
+                    />
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      onClick={handleAddInterest}
+                      disabled={isAddingInterest || !newInterestInput.trim()}
+                      className='h-9 w-9 border border-dashed'
                     >
-                      {topic}
-                    </Badge>
-                  </button>
-                ))}
+                      {isAddingInterest ? (
+                        <Loader2Icon className='size-4 animate-spin' />
+                      ) : (
+                        <PlusIcon className='size-4' />
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </div>
+
+              <div className='space-y-3'>
+                <div className='text-muted-foreground flex items-center justify-between text-xs font-bold tracking-[0.2em] uppercase'>
+                  <div className='flex items-center gap-2'>
+                    <GlobeIcon className='size-4' />
+                    Global Trends
+                  </div>
+                  <Button
+                    variant='ghost'
+                    size='sm'
+                    onClick={handleFetchGlobalTrends}
+                    disabled={isFetchingTrends}
+                    className='h-6 gap-1 px-2 text-[10px]'
+                  >
+                    {isFetchingTrends ? (
+                      <Loader2Icon className='size-3 animate-spin' />
+                    ) : (
+                      <SparklesIcon className='size-3' />
+                    )}
+                    Suggest Top 3
+                  </Button>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                  {globalTrends.length > 0 ? (
+                    globalTrends.map((topic) => (
+                      <button
+                        key={topic}
+                        onClick={() => handleGenerateArticle(topic)}
+                        disabled={isGenerating}
+                      >
+                        <Badge
+                          variant='secondary'
+                          className='bg-primary/5 text-primary border-primary/10 hover:bg-primary hover:text-primary-foreground cursor-pointer rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-all'
+                        >
+                          {topic}
+                        </Badge>
+                      </button>
+                    ))
+                  ) : (
+                    <div className='text-muted-foreground py-2 text-xs italic'>
+                      Click above to see what&apos;s trending globally...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {personalTopics.length > 0 && (
+                <div className='space-y-3'>
+                  <div className='text-primary flex items-center gap-2 text-xs font-bold tracking-[0.2em] uppercase'>
+                    <SparklesIcon className='size-4' />
+                    Suggested from Lists
+                  </div>
+                  <div className='flex flex-wrap gap-2'>
+                    {personalTopics.map((topic) => (
+                      <button
+                        key={topic}
+                        onClick={() => handleGenerateArticle(topic, true)}
+                        disabled={isGenerating}
+                        className='group relative'
+                      >
+                        <Badge
+                          variant='outline'
+                          className='border-primary/30 bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-all'
+                        >
+                          {topic}
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -203,8 +402,8 @@ export function ArticlesView({ initialArticles }: ArticlesViewProps) {
           </div>
           <CardTitle className='text-xl'>No articles yet</CardTitle>
           <p className='text-muted-foreground mt-2 max-w-sm'>
-            Generate your first article from today&apos;s trending topics or
-            check back tomorrow for our daily update!
+            Generate your first article based on your interests or search for a
+            custom topic above.
           </p>
           <Button
             className='mt-6'
@@ -223,14 +422,24 @@ export function ArticlesView({ initialArticles }: ArticlesViewProps) {
               className='group flex h-full flex-col overflow-hidden transition-all hover:shadow-xl'
             >
               <CardHeader className='pb-3'>
-                <div className='mb-3 flex items-center justify-between'>
-                  <Badge
-                    variant='secondary'
-                    className='bg-primary/10 text-primary hover:bg-primary/20 px-2 py-0.5 text-[9px] tracking-widest uppercase transition-colors'
-                  >
-                    {article.topic || 'Trending'}
-                  </Badge>
-                  <div className='text-muted-foreground flex items-center gap-1 text-[10px] font-bold tracking-wider uppercase'>
+                <div className='mb-3 flex items-start justify-between gap-4'>
+                  <div className='flex flex-wrap gap-2 overflow-hidden'>
+                    <Badge
+                      variant='secondary'
+                      className='bg-primary/10 text-primary hover:bg-primary/20 max-w-[180px] truncate px-2 py-0.5 text-[9px] tracking-widest uppercase transition-colors'
+                    >
+                      {article.topic || 'Trending'}
+                    </Badge>
+                    {article.isPublic === 'false' && (
+                      <Badge
+                        variant='outline'
+                        className='border-yellow-500/50 px-2 py-0.5 text-[9px] tracking-widest text-yellow-600 uppercase dark:text-yellow-400'
+                      >
+                        Private
+                      </Badge>
+                    )}
+                  </div>
+                  <div className='text-muted-foreground shrink-0 pt-1 text-[9px] font-bold tracking-wider whitespace-nowrap uppercase'>
                     <time dateTime={article.createdAt.toISOString()}>
                       {formatDistanceToNow(article.createdAt, {
                         addSuffix: true
@@ -273,6 +482,30 @@ export function ArticlesView({ initialArticles }: ArticlesViewProps) {
                   >
                     <Share2Icon className='size-4' />
                   </Button>
+                  {article.userId === user?.id && (
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      className={`h-8 w-8 shrink-0 ${article.isPublic === 'true' ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
+                      onClick={() =>
+                        handleTogglePublic(
+                          article.id,
+                          article.isPublic === 'false'
+                        )
+                      }
+                      title={
+                        article.isPublic === 'true' ? 'Make Private' : 'Publish'
+                      }
+                    >
+                      <GlobeIcon
+                        className={`size-4 transition-all ${
+                          article.isPublic === 'true'
+                            ? 'text-primary'
+                            : 'opacity-20'
+                        }`}
+                      />
+                    </Button>
+                  )}
                 </div>
                 <Button
                   variant='ghost'

@@ -1,9 +1,10 @@
 'use server';
 
 import { db } from '@/db';
-import { articles, listItems } from '@/db/schema';
+import { articles, listItems, interests } from '@/db/schema';
 import { revalidatePath } from 'next/cache';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, and, or } from 'drizzle-orm';
+import { auth } from '@clerk/nextjs/server';
 
 export interface ArticleData {
   title: string;
@@ -14,7 +15,23 @@ export interface ArticleData {
 }
 
 export async function getArticlesAction() {
-  return await db.select().from(articles).orderBy(desc(articles.createdAt));
+  const { userId } = await auth();
+
+  if (!userId) {
+    // Only return public articles for unauthenticated users
+    return await db
+      .select()
+      .from(articles)
+      .where(eq(articles.isPublic, 'true'))
+      .orderBy(desc(articles.createdAt));
+  }
+
+  // Return public articles OR articles owned by the current user
+  return await db
+    .select()
+    .from(articles)
+    .where(or(eq(articles.isPublic, 'true'), eq(articles.userId, userId)))
+    .orderBy(desc(articles.createdAt));
 }
 
 export async function getArticleAction(id: string) {
@@ -78,28 +95,41 @@ async function callPollinations(prompt: string, jsonMode = false, retries = 2) {
   return '';
 }
 
-export async function generateArticleAction(customTopic?: string) {
+export async function generateArticleAction(
+  customTopic?: string,
+  forcePrivate = false
+) {
+  const { userId } = await auth();
+
   try {
     // 1. Choose a topic (either custom or trending)
     let topic = customTopic;
     if (!topic) {
-      // Fetch some random list items to provide context for the AI
+      // Fetch some random managed interests first
+      const managedInterests = await db
+        .select({ name: interests.name })
+        .from(interests)
+        .where(eq(interests.userId, userId || ''))
+        .orderBy(sql`RANDOM()`)
+        .limit(5);
+
+      // Also get some random list items for extra context
       const randomItems = await db
         .select({ title: listItems.title })
         .from(listItems)
         .orderBy(sql`RANDOM()`)
-        .limit(10);
+        .limit(5);
 
-      const interests = randomItems
-        .map((item) => item.title)
-        .filter(Boolean)
-        .join(', ');
+      const interestTitles = managedInterests.map((i) => i.name);
+      const listTitles = randomItems.map((item) => item.title).filter(Boolean);
+
+      const allInterests = [...interestTitles, ...listTitles].join(', ');
 
       let topicPrompt = `Suggest one highly trending topic in technology, science, or productivity today. Only return the topic name, no explanation.`;
 
-      if (interests) {
+      if (allInterests) {
         topicPrompt = `Suggest one highly trending topic in technology, science, or productivity today. 
-        Take inspiration from these interests: ${interests}. 
+        Take inspiration from these specific interests: ${allInterests}. 
         Return a specific topic name that would be interesting to someone with these tastes. 
         Only return the topic name, no explanation.`;
       }
@@ -107,10 +137,12 @@ export async function generateArticleAction(customTopic?: string) {
       const suggestedTopic = await callPollinations(topicPrompt);
       topic = suggestedTopic.trim();
 
-      // If the model returned an empty string or something went wrong,
-      // check if we have any interest to use as a fallback topic
-      if (!topic && randomItems.length > 0) {
-        topic = randomItems[0].title || 'Technology and Innovation';
+      // Fallback
+      if (!topic && interestTitles.length > 0) {
+        topic =
+          interestTitles[Math.floor(Math.random() * interestTitles.length)];
+      } else if (!topic && listTitles.length > 0) {
+        topic = listTitles[0] || 'Technology and Innovation';
       } else if (!topic) {
         topic = 'Latest in AI';
       }
@@ -152,7 +184,8 @@ export async function generateArticleAction(customTopic?: string) {
         content: articleData.content || rawResponse,
         topic: topic,
         imageUrl: null,
-        isPublic: 'true'
+        isPublic: forcePrivate ? 'false' : 'true',
+        userId: userId || 'system'
       })
       .returning();
 
@@ -172,14 +205,92 @@ export async function deleteArticleAction(id: string) {
 }
 
 export async function toggleArticlePublicAction(id: string, isPublic: boolean) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
   await db
     .update(articles)
     .set({
       isPublic: isPublic ? 'true' : 'false',
       updatedAt: new Date()
     })
-    .where(eq(articles.id, id));
+    .where(and(eq(articles.id, id), eq(articles.userId, userId)));
 
   revalidatePath('/articles');
   revalidatePath(`/articles/${id}`);
+}
+
+export async function getTopicsFromListsAction() {
+  const { userId } = await auth();
+  if (!userId) return [];
+
+  const items = await db
+    .select({ tags: listItems.tags })
+    .from(listItems)
+    .where(eq(listItems.userId, userId));
+
+  const tagCounts: Record<string, number> = {};
+
+  items.forEach((item) => {
+    if (item.tags) {
+      const tags = item.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      tags.forEach((tag) => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      });
+    }
+  });
+
+  // Sort by count descending and return top 15
+  return Object.entries(tagCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([tag]) => tag)
+    .slice(0, 15);
+}
+export async function getInterestsAction() {
+  const { userId } = await auth();
+  if (!userId) return [];
+  return await db
+    .select()
+    .from(interests)
+    .where(eq(interests.userId, userId))
+    .orderBy(desc(interests.createdAt));
+}
+
+export async function addInterestAction(name: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const [newInterest] = await db
+    .insert(interests)
+    .values({
+      userId,
+      name
+    })
+    .returning();
+
+  revalidatePath('/articles');
+  return newInterest;
+}
+
+export async function deleteInterestAction(id: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  await db
+    .delete(interests)
+    .where(and(eq(interests.id, id), eq(interests.userId, userId)));
+
+  revalidatePath('/articles');
+}
+export async function getGlobalTrendingTopicsAction() {
+  const prompt = `Suggest exactly 3 of the most trending, specific, and fascinating topics in technology, science, or productivity today. Only return the topic names separated by commas, no explanation, no numbers.`;
+  const result = await callPollinations(prompt);
+  return result
+    .split(',')
+    .map((t: string) => t.trim())
+    .filter(Boolean)
+    .slice(0, 3);
 }

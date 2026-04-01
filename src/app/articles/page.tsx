@@ -1,6 +1,10 @@
 import PageContainer from '@/components/layout/page-container';
 import { ArticlesView } from '@/features/articles/components/articles-view';
-import { getArticlesAction } from '@/features/articles/actions';
+import {
+  getArticlesAction,
+  getTopicsFromListsAction,
+  getInterestsAction
+} from '@/features/articles/actions';
 
 export const metadata = {
   title: 'Daily Articles | Dejado',
@@ -8,11 +12,19 @@ export const metadata = {
 };
 
 export default async function ArticlesPage() {
-  const articles = await getArticlesAction();
+  const [articles, topics, interests] = await Promise.all([
+    getArticlesAction(),
+    getTopicsFromListsAction(),
+    getInterestsAction()
+  ]);
 
   return (
     <PageContainer scrollable>
-      <ArticlesView initialArticles={articles} />
+      <ArticlesView
+        initialArticles={articles}
+        initialTopics={topics}
+        initialInterests={interests}
+      />
     </PageContainer>
   );
 }

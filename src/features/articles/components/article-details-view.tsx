@@ -26,6 +26,7 @@ interface Article {
   topic: string | null;
   imageUrl: string | null;
   isPublic: string;
+  userId: string | null;
   createdAt: Date;
 }
 
@@ -36,7 +37,7 @@ interface ArticleDetailsViewProps {
 
 export function ArticleDetailsView({
   article: initialArticle,
-  isOwner = true
+  isOwner = false
 }: ArticleDetailsViewProps) {
   const [article, setArticle] = useState<Article>(initialArticle);
   const [isUpdating, setIsUpdating] = useState(false);

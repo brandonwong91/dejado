@@ -3,6 +3,8 @@ import { ArticleDetailsView } from '@/features/articles/components/article-detai
 import { getArticleAction } from '@/features/articles/actions';
 import { notFound } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 export async function generateMetadata({
   params
@@ -33,16 +35,21 @@ export default async function ArticlePage({
     notFound();
   }
 
+  const isOwner = userId === article.userId;
+
   // Accessibility check: only public can be seen if not the "owner"
-  // Note: currently there's no owner per article in DB schema but could be added
-  if (article.isPublic !== 'true' && !userId) {
+  if (article.isPublic !== 'true' && !isOwner) {
     return (
       <PageContainer>
         <div className='flex flex-col items-center justify-center py-20 text-center'>
-          <h1 className='text-2xl font-bold'>Private Article</h1>
-          <p className='text-muted-foreground mt-2'>
-            You do not have permission to view this content.
+          <h1 className='text-3xl font-bold'>Private Intelligence</h1>
+          <p className='text-muted-foreground mt-4 max-w-sm'>
+            This specialized insight is restricted. Only the curator has access
+            to these private findings.
           </p>
+          <Button asChild variant='outline' className='mt-8'>
+            <Link href='/articles'>Return to Feed</Link>
+          </Button>
         </div>
       </PageContainer>
     );
@@ -50,7 +57,7 @@ export default async function ArticlePage({
 
   return (
     <PageContainer scrollable>
-      <ArticleDetailsView article={article} />
+      <ArticleDetailsView article={article} isOwner={isOwner} />
     </PageContainer>
   );
 }
