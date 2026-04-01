@@ -477,7 +477,7 @@ function InfobarGroupLabel({
   asChild = false,
   ...props
 }: React.ComponentProps<'div'> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot : 'div';
+  const Comp: any = asChild ? Slot : 'div';
 
   return (
     <Comp
@@ -498,7 +498,7 @@ function InfobarGroupAction({
   asChild = false,
   ...props
 }: React.ComponentProps<'button'> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot : 'button';
+  const Comp: any = asChild ? Slot : 'button';
 
   return (
     <Comp
@@ -587,7 +587,7 @@ function InfobarMenuButton({
   isActive?: boolean;
   tooltip?: string | React.ComponentProps<typeof TooltipContent>;
 } & VariantProps<typeof infobarMenuButtonVariants>) {
-  const Comp = asChild ? Slot : 'button';
+  const Comp: any = asChild ? Slot : 'button';
   const { isMobile, state } = useInfobar();
 
   const button = (
@@ -633,7 +633,7 @@ function InfobarMenuAction({
   asChild?: boolean;
   showOnHover?: boolean;
 }) {
-  const Comp = asChild ? Slot : 'button';
+  const Comp: any = asChild ? Slot : 'button';
 
   return (
     <Comp
@@ -756,7 +756,7 @@ function InfobarMenuSubButton({
   size?: 'sm' | 'md';
   isActive?: boolean;
 }) {
-  const Comp = asChild ? Slot : 'a';
+  const Comp: any = asChild ? Slot : 'a';
 
   return (
     <Comp
