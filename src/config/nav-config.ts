@@ -89,51 +89,36 @@ export const navItems: NavItem[] = [
     isActive: false,
     items: []
   },
-  {
-    title: 'Product',
-    url: '/dashboard/product',
-    icon: 'product',
-    shortcut: ['p', 'p'],
-    isActive: false,
-    items: []
-  },
-  {
-    title: 'Kanban',
-    url: '/dashboard/kanban',
-    icon: 'kanban',
-    shortcut: ['k', 'k'],
-    isActive: false,
-    items: []
-  },
-
-  {
-    title: 'Pro',
-    url: '#',
-    icon: 'pro',
-    isActive: true,
-    items: [
-      {
-        title: 'Exclusive',
-        url: '/dashboard/exclusive',
-        icon: 'exclusive',
-        shortcut: ['m', 'm']
-      }
-    ]
-  },
-  {
-    title: 'System',
-    url: '#',
-    icon: 'settings',
-    isActive: true,
-    items: [
-      {
-        title: 'Login',
-        shortcut: ['l', 'l'],
-        url: '/',
-        icon: 'login'
-      }
-    ]
-  },
+  // {
+  //   title: 'Product',
+  //   url: '/dashboard/product',
+  //   icon: 'product',
+  //   shortcut: ['p', 'p'],
+  //   isActive: false,
+  //   items: []
+  // },
+  // {
+  //   title: 'Kanban',
+  //   url: '/dashboard/kanban',
+  //   icon: 'kanban',
+  //   shortcut: ['k', 'k'],
+  //   isActive: false,
+  //   items: []
+  // },
+  // {
+  //   title: 'Pro',
+  //   url: '#',
+  //   icon: 'pro',
+  //   isActive: true,
+  //   items: [
+  //     {
+  //       title: 'Exclusive',
+  //       url: '/dashboard/exclusive',
+  //       icon: 'exclusive',
+  //       shortcut: ['m', 'm']
+  //     }
+  //   ]
+  // },
   {
     title: 'Auth Settings',
     url: '#',

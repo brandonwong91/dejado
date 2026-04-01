@@ -39,6 +39,17 @@ import {
 } from '../actions';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '@/components/ui/alert-dialog';
 
 const SUGGESTED_TOPICS = [
   'Artificial Intelligence',
@@ -124,7 +135,6 @@ export function ArticlesView({
   };
 
   const handleDeleteArticle = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this article?')) return;
     try {
       await deleteArticleAction(id);
       setArticles((prev) => prev.filter((a) => a.id !== id));
@@ -251,7 +261,7 @@ export function ArticlesView({
               </Button>
             </div>
 
-            <div className='grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3'>
+            <div className='grid grid-cols-1 gap-8 md:grid-cols-2'>
               <div className='space-y-3'>
                 <div className='text-muted-foreground flex items-center justify-between text-xs font-bold tracking-[0.2em] uppercase'>
                   <div className='flex items-center gap-2'>
@@ -507,15 +517,38 @@ export function ArticlesView({
                     </Button>
                   )}
                 </div>
-                <Button
-                  variant='ghost'
-                  size='icon'
-                  className='text-muted-foreground hover:text-destructive ml-auto h-8 w-8 shrink-0'
-                  onClick={() => handleDeleteArticle(article.id)}
-                  title='Delete'
-                >
-                  <Trash2Icon className='size-4' />
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      className='text-muted-foreground hover:text-destructive ml-auto h-8 w-8 shrink-0'
+                      title='Delete'
+                    >
+                      <Trash2Icon className='size-4' />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Are you absolutely sure?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently
+                        delete your article.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDeleteArticle(article.id)}
+                        className='bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all hover:scale-[1.02] active:scale-[0.98]'
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </CardFooter>
             </Card>
           ))}
