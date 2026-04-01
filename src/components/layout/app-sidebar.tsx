@@ -101,7 +101,57 @@ export default function AppSidebar() {
           <SidebarMenu>
             {filteredItems.map((item) => {
               const Icon = item.icon ? Icons[item.icon] : Icons.logo;
-              return item?.items && item?.items?.length > 0 ? (
+              const hasItems = item?.items && item?.items?.length > 0;
+
+              if (hasItems && state === 'collapsed') {
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <SidebarMenuButton
+                          tooltip={item.title}
+                          isActive={pathname === item.url}
+                        >
+                          {item.icon && <Icon />}
+                          <span>{item.title}</span>
+                          <IconChevronRight className='ml-auto transition-transform duration-200' />
+                        </SidebarMenuButton>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        side='right'
+                        align='start'
+                        sideOffset={8}
+                        className='bg-sidebar text-sidebar-foreground border-sidebar-border w-56'
+                      >
+                        <DropdownMenuLabel className='text-sidebar-foreground/70 text-xs font-medium tracking-wider uppercase'>
+                          {item.title}
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator className='bg-sidebar-border' />
+                        {item.items?.map((subItem) => (
+                          <DropdownMenuItem
+                            key={subItem.title}
+                            asChild
+                            className='hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground cursor-pointer'
+                          >
+                            <Link href={subItem.url}>
+                              <div className='flex w-full items-center gap-2'>
+                                {subItem.icon &&
+                                  item.icon &&
+                                  React.createElement(Icons[subItem.icon], {
+                                    className: 'size-4'
+                                  })}
+                                <span>{subItem.title}</span>
+                              </div>
+                            </Link>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </SidebarMenuItem>
+                );
+              }
+
+              return hasItems ? (
                 <Collapsible
                   key={item.title}
                   asChild
