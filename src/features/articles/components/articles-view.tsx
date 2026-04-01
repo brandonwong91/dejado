@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -39,6 +39,7 @@ import {
 } from '../actions';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,6 +51,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
+import { HoverBorderGradient } from '@/components/ui/hover-border-gradient';
 
 const SUGGESTED_TOPICS = [
   'Artificial Intelligence',
@@ -102,6 +104,10 @@ export function ArticlesView({
   const [isAddingInterest, setIsAddingInterest] = useState(false);
   const [globalTrends, setGlobalTrends] = useState<string[]>([]);
   const [isFetchingTrends, setIsFetchingTrends] = useState(false);
+
+  useEffect(() => {
+    handleFetchGlobalTrends();
+  }, []);
 
   const handleGenerateArticle = async (
     selectedTopic?: string,
@@ -341,25 +347,29 @@ export function ArticlesView({
                     Suggest Top 3
                   </Button>
                 </div>
-                <div className='flex flex-wrap gap-2'>
+                <div className='flex flex-wrap gap-3'>
                   {globalTrends.length > 0 ? (
                     globalTrends.map((topic) => (
-                      <button
+                      <HoverBorderGradient
                         key={topic}
                         onClick={() => handleGenerateArticle(topic)}
                         disabled={isGenerating}
+                        className='bg-background flex items-center justify-center p-0'
+                        containerClassName={cn(
+                          'h-10',
+                          isGenerating && 'opacity-50 cursor-not-allowed'
+                        )}
                       >
-                        <Badge
-                          variant='secondary'
-                          className='bg-primary/5 text-primary border-primary/10 hover:bg-primary hover:text-primary-foreground cursor-pointer rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-all'
-                        >
+                        <span className='text-foreground dark:text-foreground/90 px-4 py-2 text-sm font-medium'>
                           {topic}
-                        </Badge>
-                      </button>
+                        </span>
+                      </HoverBorderGradient>
                     ))
                   ) : (
                     <div className='text-muted-foreground py-2 text-xs italic'>
-                      Click above to see what&apos;s trending globally...
+                      {isFetchingTrends
+                        ? 'Fetching latest trends...'
+                        : "Click above to see what's trending globally..."}
                     </div>
                   )}
                 </div>

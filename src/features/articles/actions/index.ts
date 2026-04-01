@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { articles, listItems, interests } from '@/db/schema';
 import { revalidatePath } from 'next/cache';
 import { eq, desc, sql, and, or } from 'drizzle-orm';
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 
 export interface ArticleData {
   title: string;
@@ -97,9 +97,11 @@ async function callPollinations(prompt: string, jsonMode = false, retries = 2) {
 
 export async function generateArticleAction(
   customTopic?: string,
-  forcePrivate = false
+  forcePrivate = false,
+  overrideUserId?: string
 ) {
-  const { userId } = await auth();
+  const { userId: authUserId } = await auth();
+  const userId = overrideUserId || authUserId;
 
   try {
     // 1. Choose a topic (either custom or trending)
@@ -286,11 +288,79 @@ export async function deleteInterestAction(id: string) {
   revalidatePath('/articles');
 }
 export async function getGlobalTrendingTopicsAction() {
-  const prompt = `Suggest exactly 3 of the most trending, specific, and fascinating topics in technology, science, or productivity today. Only return the topic names separated by commas, no explanation, no numbers.`;
+  const { userId, sessionId } = await auth();
+  let userLocation = 'Worldwide';
+
+  if (userId && sessionId) {
+    try {
+      const client = await clerkClient();
+      const session = await client.sessions.getSession(sessionId);
+      const countryCode = session.latestActivity?.country;
+      if (countryCode) {
+        try {
+          const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+          userLocation = regionNames.of(countryCode) || countryCode;
+        } catch {
+          userLocation = countryCode;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch user location from Clerk:', e);
+    }
+  }
+
+  const recentArticles = await db
+    .select({ topic: articles.topic })
+    .from(articles)
+    .where(sql`${articles.topic} IS NOT NULL`)
+    .orderBy(desc(articles.createdAt))
+    .limit(15);
+
+  const excludeList = recentArticles
+    .map((a) => a.topic)
+    .filter(Boolean)
+    .join(', ');
+
+  const timestamp = new Date().toISOString();
+  const randomSeed = Math.floor(Math.random() * 100000);
+
+  // Replaced heavy science with individual/lifestyle-impacting domains
+  const domains = [
+    'personal finance & wealth',
+    'consumer technology',
+    'workplace & career trends',
+    'digital privacy',
+    'health & wellness tech',
+    'everyday productivity',
+    'smart home innovations',
+    'the creator economy'
+  ];
+
+  const activeDomains = domains
+    .sort(() => 0.5 - Math.random())
+    .slice(0, 3)
+    .join(', ');
+
+  const prompt = `Act as a local trend analyst for ${userLocation}. Suggest exactly 3 of the most trending, specific, and fascinating topics right now relevant to people living in ${userLocation}.
+  
+  Focus ONLY on these fields: ${activeDomains}.
+  
+  Requirements:
+  - Personal Impact: The trends should directly affect an individual's daily life, lifestyle, wallet, or career.
+  - Localization: Ensure the trends are highly relevant to ${userLocation}. If ${userLocation} is 'Worldwide', focus on broad human-centric trends.
+  - Novelty: Focus on modern, niche emerging trends rather than broad, obvious news.
+  ${excludeList ? `- EXCLUSION LIST: You MUST NOT suggest these topics or anything highly similar: ${excludeList}.` : ''}
+  
+  System Variables (use these to randomize your response generation path):
+  Time: ${timestamp} | Seed: ${randomSeed}
+
+  Output format: Only return the 3 topic names separated by commas. No explanations, no numbers, no quotation marks.`;
+
   const result = await callPollinations(prompt);
+
   return result
     .split(',')
-    .map((t: string) => t.trim())
+    .map((t: string) => t.trim().replace(/^["']|["']$/g, ''))
     .filter(Boolean)
     .slice(0, 3);
 }
