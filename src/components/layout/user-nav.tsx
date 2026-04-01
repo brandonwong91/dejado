@@ -14,6 +14,13 @@ import { SignOutButton, useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { ModeToggle } from './ThemeToggle/theme-toggle';
 import { ThemeSelector } from '../theme-selector';
+import {
+  UserIcon,
+  CreditCardIcon,
+  SettingsIcon,
+  LogOutIcon,
+  UsersIcon
+} from 'lucide-react';
 
 export function UserNav() {
   const { user } = useUser();
@@ -44,12 +51,36 @@ export function UserNav() {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem onClick={() => router.push('/dashboard/profile')}>
+            <DropdownMenuItem
+              className='cursor-pointer'
+              onClick={() => router.push('/dashboard/auth-settings/workspaces')}
+            >
+              <SettingsIcon className='mr-2 h-4 w-4' />
+              Workspaces
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className='cursor-pointer'
+              onClick={() =>
+                router.push('/dashboard/auth-settings/workspaces/team')
+              }
+            >
+              <UsersIcon className='mr-2 h-4 w-4' />
+              Teams
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className='cursor-pointer'
+              onClick={() => router.push('/dashboard/auth-settings/billing')}
+            >
+              <CreditCardIcon className='mr-2 h-4 w-4' />
+              Billing
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className='cursor-pointer'
+              onClick={() => router.push('/dashboard/auth-settings/profile')}
+            >
+              <UserIcon className='mr-2 h-4 w-4' />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem>Billing</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
-            <DropdownMenuItem>New Team</DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
@@ -62,8 +93,14 @@ export function UserNav() {
             </div>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>
-            <SignOutButton redirectUrl='/auth/sign-in' />
+          <DropdownMenuItem
+            className='text-destructive focus:bg-destructive focus:text-destructive-foreground cursor-pointer'
+            asChild
+          >
+            <div className='flex items-center'>
+              <LogOutIcon className='mr-2 h-4 w-4' />
+              <SignOutButton redirectUrl='/auth/sign-in' />
+            </div>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
