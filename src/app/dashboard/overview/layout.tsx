@@ -51,8 +51,8 @@ export default async function OverViewLayout({
   return (
     <PageContainer>
       <div className='flex flex-1 flex-col space-y-2'>
-        <div className='flex items-center justify-between space-y-2'>
-          <h2 className='text-3xl font-bold tracking-tight'>
+        <div className='flex flex-wrap items-center justify-between gap-2'>
+          <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
             Welcome back, {user?.firstName || 'Explorer'} 👋
           </h2>
         </div>
@@ -261,13 +261,10 @@ export default async function OverViewLayout({
         </div>
 
         <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-7'>
-          <div className='col-span-4'>{bar_stats}</div>
-          <div className='col-span-4 md:col-span-3'>
-            {/* sales arallel routes */}
-            {sales}
-          </div>
-          <div className='col-span-4'>{area_stats}</div>
-          <div className='col-span-4 md:col-span-3'>{pie_stats}</div>
+          <div className='lg:col-span-4'>{bar_stats}</div>
+          <div className='lg:col-span-3'>{sales}</div>
+          <div className='lg:col-span-4'>{area_stats}</div>
+          <div className='lg:col-span-3'>{pie_stats}</div>
         </div>
       </div>
     </PageContainer>

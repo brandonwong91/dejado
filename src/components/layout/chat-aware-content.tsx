@@ -8,6 +8,7 @@ import {
 import ChatFab from '@/features/chat/components/chat-fab';
 import ChatPanel from '@/features/chat/components/chat-panel';
 import { useChatPanel } from '@/features/chat/store';
+import { useMediaQuery } from '@/hooks/use-media-query';
 import Header from './header';
 
 export default function ChatAwareContent({
@@ -16,6 +17,7 @@ export default function ChatAwareContent({
   children: React.ReactNode;
 }) {
   const { open } = useChatPanel();
+  const { isOpen: isMobile } = useMediaQuery();
 
   if (!open) {
     return (
@@ -24,6 +26,14 @@ export default function ChatAwareContent({
         {children}
         <ChatFab />
       </>
+    );
+  }
+
+  if (isMobile) {
+    return (
+      <div className='absolute inset-0 flex flex-col overflow-hidden'>
+        <ChatPanel />
+      </div>
     );
   }
 

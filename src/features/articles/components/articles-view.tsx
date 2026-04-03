@@ -37,6 +37,7 @@ import {
   deleteInterestAction,
   getGlobalTrendingTopicsAction
 } from '../actions';
+import { useGlobalTrendsStore } from '../store';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -93,6 +94,11 @@ export function ArticlesView({
   initialInterests
 }: ArticlesViewProps) {
   const { user } = useUser();
+  const {
+    trends: cachedTrends,
+    userId: cachedUserId,
+    setTrends: storeTrends
+  } = useGlobalTrendsStore();
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [isGenerating, setIsGenerating] = useState(false);
   const [searchTopic, setSearchTopic] = useState('');
@@ -102,12 +108,16 @@ export function ArticlesView({
   );
   const [newInterestInput, setNewInterestInput] = useState('');
   const [isAddingInterest, setIsAddingInterest] = useState(false);
-  const [globalTrends, setGlobalTrends] = useState<string[]>([]);
+  const [globalTrends, setGlobalTrends] = useState<string[]>(
+    cachedUserId === user?.id ? cachedTrends : []
+  );
   const [isFetchingTrends, setIsFetchingTrends] = useState(false);
 
   useEffect(() => {
+    // Skip fetch if we already have trends cached for this user
+    if (cachedUserId === user?.id && cachedTrends.length > 0) return;
     handleFetchGlobalTrends();
-  }, []);
+  }, [user?.id]);
 
   const handleGenerateArticle = async (
     selectedTopic?: string,
@@ -210,6 +220,7 @@ export function ArticlesView({
     try {
       const trends = await getGlobalTrendingTopicsAction();
       setGlobalTrends(trends);
+      storeTrends(trends, user?.id ?? null);
       if (trends.length > 0) {
         toast.success('Found top 3 global trends!');
       }

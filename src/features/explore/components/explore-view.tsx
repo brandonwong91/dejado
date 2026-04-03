@@ -18,24 +18,24 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getPublicListsAction } from '../actions';
+import { useExploreStore } from '../store';
 
-interface PublicList {
-  id: string;
-  name: string;
-  description: string | null;
-  userId: string;
-  itemCount: number;
-}
-
-export function ExploreView({
-  lists,
-  userId
-}: {
-  lists: PublicList[];
-  userId: string | null;
-}) {
+export function ExploreView({ userId }: { userId: string | null }) {
+  const { lists, userId: cachedUserId, setLists } = useExploreStore();
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Skip fetch if cache belongs to the current user and has data
+    if (cachedUserId === userId && lists.length > 0) return;
+
+    setLoading(true);
+    getPublicListsAction()
+      .then((data) => setLists(data, userId))
+      .finally(() => setLoading(false));
+  }, [userId]);
 
   const filteredLists = lists.filter(
     (list) =>
@@ -76,7 +76,16 @@ export function ExploreView({
         />
       </div>
 
-      {filteredLists.length === 0 ? (
+      {loading ? (
+        <div className='grid w-full min-w-0 grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className='bg-muted h-40 animate-pulse rounded-xl border'
+            />
+          ))}
+        </div>
+      ) : filteredLists.length === 0 ? (
         <div className='bg-muted/20 flex flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center'>
           <ListIcon className='text-muted-foreground mb-4 size-12 opacity-20' />
           <p className='text-muted-foreground font-medium'>
