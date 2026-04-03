@@ -232,7 +232,7 @@ export function ArticlesView({
   };
 
   return (
-    <div className='mx-auto max-w-6xl space-y-12 pb-20'>
+    <div className='space-y-12 pb-20'>
       <div className='flex flex-col gap-8'>
         <div className='space-y-2 text-center md:text-left'>
           <h2 className='text-3xl font-bold tracking-tight md:text-5xl'>
