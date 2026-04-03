@@ -1,6 +1,6 @@
 import KBar from '@/components/kbar';
 import AppSidebar from '@/components/layout/app-sidebar';
-import Header from '@/components/layout/header';
+import ChatAwareContent from '@/components/layout/chat-aware-content';
 import { InfoSidebar } from '@/components/layout/info-sidebar';
 import { InfobarProvider } from '@/components/ui/infobar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -18,10 +18,7 @@ export default function DashboardLayoutView({
         <InfobarProvider defaultOpen={false}>
           <AppSidebar />
           <SidebarInset>
-            <Header />
-            {/* page main content */}
-            {children}
-            {/* page main content ends */}
+            <ChatAwareContent>{children}</ChatAwareContent>
           </SidebarInset>
           <InfoSidebar side='right' />
         </InfobarProvider>
