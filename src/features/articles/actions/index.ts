@@ -5,6 +5,7 @@ import { articles, listItems, interests } from '@/db/schema';
 import { revalidatePath } from 'next/cache';
 import { eq, desc, sql, and, or } from 'drizzle-orm';
 import { auth, clerkClient } from '@clerk/nextjs/server';
+import { SYSTEM_DESIGN_SYSTEMS } from '../constants';
 
 export interface ArticleData {
   title: string;
@@ -287,6 +288,97 @@ export async function deleteInterestAction(id: string) {
 
   revalidatePath('/articles');
 }
+
+export async function generateSystemDesignAction(system?: string) {
+  const { userId } = await auth();
+
+  const target =
+    system?.trim() ||
+    SYSTEM_DESIGN_SYSTEMS[
+      Math.floor(Math.random() * SYSTEM_DESIGN_SYSTEMS.length)
+    ];
+
+  const prompt = `You are a senior software architect preparing an interview-ready system design document.
+Generate a detailed system design for "${target}" following the hellointerview.com format.
+
+Return ONLY a raw JSON object (no markdown code blocks) with these fields: "title", "summary", "content".
+
+Rules:
+- "title": e.g. "System Design: ${target}"
+- "summary": one sentence describing the design scope and scale
+- "content": rich Markdown following EXACTLY this section order:
+
+## Functional Requirements
+List 5-7 core user-facing features as bullet points.
+
+## Non-Functional Requirements
+List 5-6 constraints with specific numbers (e.g. "Support 500M DAU", "< 200ms p99 read latency", "99.99% uptime").
+
+## Core Entities
+A short table or list of 4-6 main data entities with their key fields.
+
+## Database Design
+Key table schemas wrapped in a fenced SQL code block like this:
+\`\`\`sql
+CREATE TABLE example ( id BIGINT PRIMARY KEY );
+\`\`\`
+Include primary keys, foreign keys, and important indexes.
+
+## API Design
+5-7 key REST endpoints. Format each as: \`METHOD /path\` — brief description.
+
+## High-Level Design
+A prose description of the main components (client, load balancer, app servers, databases, caches, CDN, queues) and how data flows through them for the most critical path.
+
+## Scalability
+For each major bottleneck, provide a concrete scaling strategy (sharding, caching, CDN, read replicas, message queues, etc.).
+
+## Architecture Diagram
+A Mermaid flowchart wrapped in a fenced mermaid code block like this:
+\`\`\`mermaid
+flowchart LR
+  Client --> LB
+\`\`\`
+Rules for the Mermaid diagram:
+- Use "flowchart LR" or "flowchart TD" as the first line — do NOT add a separate "direction" line
+- Node labels must be single-line (no \\n or newlines inside brackets)
+- Keep labels short (2-4 words max)
+- No style declarations
+- 8-14 nodes maximum
+- Show: Client, Load Balancer, App Servers, Primary DB, Redis Cache, CDN, and any queues or workers relevant to this system
+
+IMPORTANT: The backtick fences inside "content" must be escaped as literal characters within the JSON string value. Do not break the JSON structure.
+Be technical and specific. Include real-world scale numbers throughout.`;
+
+  const rawResponse = await callPollinations(prompt, true);
+
+  let data: any;
+  try {
+    data = JSON.parse(rawResponse.replace(/```json|```/g, '').trim());
+  } catch {
+    data = {
+      title: `System Design: ${target}`,
+      summary: `A deep-dive system design for ${target}.`,
+      content: rawResponse
+    };
+  }
+
+  const [newArticle] = await db
+    .insert(articles)
+    .values({
+      title: data.title || `System Design: ${target}`,
+      summary: data.summary || `System design breakdown for ${target}.`,
+      content: data.content || rawResponse,
+      topic: `System Design Series`,
+      isPublic: 'true',
+      userId: userId || 'system'
+    })
+    .returning();
+
+  revalidatePath('/articles');
+  return newArticle;
+}
+
 export async function getGlobalTrendingTopicsAction() {
   const { userId, sessionId } = await auth();
   let userLocation = 'Worldwide';

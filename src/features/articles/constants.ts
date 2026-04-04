@@ -1,0 +1,20 @@
+export const SYSTEM_DESIGN_SYSTEMS = [
+  'Instagram',
+  'YouTube',
+  'Twitter / X',
+  'Uber',
+  'Netflix',
+  'Spotify',
+  'WhatsApp',
+  'TikTok',
+  'Airbnb',
+  'Discord',
+  'Dropbox',
+  'Slack',
+  'Reddit',
+  'LinkedIn',
+  'Google Drive',
+  'Zoom',
+  'Amazon',
+  'Stripe'
+];

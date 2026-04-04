@@ -24,12 +24,15 @@ import {
   TrendingUpIcon,
   GlobeIcon,
   LockIcon,
-  XIcon
+  XIcon,
+  ServerIcon,
+  ShuffleIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUser } from '@clerk/nextjs';
 import {
   generateArticleAction,
+  generateSystemDesignAction,
   deleteArticleAction,
   getArticlesAction,
   toggleArticlePublicAction,
@@ -37,6 +40,7 @@ import {
   deleteInterestAction,
   getGlobalTrendingTopicsAction
 } from '../actions';
+import { SYSTEM_DESIGN_SYSTEMS } from '../constants';
 import { useGlobalTrendsStore } from '../store';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
@@ -112,6 +116,9 @@ export function ArticlesView({
     cachedUserId === user?.id ? cachedTrends : []
   );
   const [isFetchingTrends, setIsFetchingTrends] = useState(false);
+  const [isGeneratingSystemDesign, setIsGeneratingSystemDesign] =
+    useState(false);
+  const systemDesignSystems = SYSTEM_DESIGN_SYSTEMS;
 
   useEffect(() => {
     // Skip fetch if we already have trends cached for this user
@@ -228,6 +235,26 @@ export function ArticlesView({
       toast.error('Failed to fetch trending topics');
     } finally {
       setIsFetchingTrends(false);
+    }
+  };
+
+  const handleGenerateSystemDesign = async (system?: string) => {
+    setIsGeneratingSystemDesign(true);
+    const toastId = toast.loading(
+      system ? `Designing ${system}...` : 'Picking a random system to design...'
+    );
+    try {
+      const newArticle = await generateSystemDesignAction(system);
+      setArticles((prev) => [newArticle, ...prev]);
+      toast.success(`System design for "${newArticle.title}" is ready!`, {
+        id: toastId
+      });
+    } catch {
+      toast.error('Failed to generate system design. Please try again.', {
+        id: toastId
+      });
+    } finally {
+      setIsGeneratingSystemDesign(false);
     }
   };
 
@@ -415,6 +442,61 @@ export function ArticlesView({
           </CardContent>
         </Card>
       </div>
+
+      {/* System Design Series */}
+      <Card className='border-primary/10 overflow-hidden border-2 shadow-lg backdrop-blur-sm'>
+        <CardContent className='space-y-5 p-6'>
+          <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
+            <div className='space-y-1'>
+              <div className='flex items-center gap-2'>
+                <ServerIcon className='text-primary size-5' />
+                <h3 className='text-lg font-bold'>System Design Series</h3>
+              </div>
+              <p className='text-muted-foreground text-sm'>
+                Deep-dive breakdowns covering functional requirements,
+                non-functional requirements, core entities, database design,
+                APIs, and scalability — hellointerview.com style.
+              </p>
+            </div>
+            <Button
+              onClick={() => handleGenerateSystemDesign()}
+              disabled={isGeneratingSystemDesign}
+              variant='outline'
+              className='shrink-0 gap-2'
+            >
+              {isGeneratingSystemDesign ? (
+                <Loader2Icon className='size-4 animate-spin' />
+              ) : (
+                <ShuffleIcon className='size-4' />
+              )}
+              Random
+            </Button>
+          </div>
+
+          <div className='space-y-2'>
+            <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
+              Pick a system
+            </p>
+            <div className='flex flex-wrap gap-2'>
+              {systemDesignSystems.map((system) => (
+                <button
+                  key={system}
+                  onClick={() => handleGenerateSystemDesign(system)}
+                  disabled={isGeneratingSystemDesign}
+                  className='group'
+                >
+                  <Badge
+                    variant='outline'
+                    className='hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-sm font-medium transition-all group-disabled:cursor-not-allowed group-disabled:opacity-50'
+                  >
+                    {system}
+                  </Badge>
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className='space-y-8'>
         <div className='flex items-center gap-4'>

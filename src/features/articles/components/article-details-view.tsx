@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { toggleArticlePublicAction } from '../actions';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { MermaidDiagram } from '@/components/ui/mermaid-diagram';
 
 interface Article {
   id: string;
@@ -77,90 +78,183 @@ export function ArticleDetailsView({
     }
   };
 
-  // Simple markdown-to-structured-HTML fallback
-  const renderContent = (content: string) => {
-    const processLine = (line: string) => {
-      return line.split(/(\*\*.*?\*\*|\[.*?\]\(.*?\))/g).map((part, j) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
+  const renderContent = (rawContent: string) => {
+    // Convert bare language labels (a line that is only e.g. "sql" or "mermaid")
+    // to proper fenced code blocks, for LLM output that omits the backtick fences.
+    // Terminates at the next ## heading, a blank line followed by a prose sentence,
+    // or end of string.
+    const content = rawContent.replace(
+      /\n(sql|mermaid|javascript|typescript|python|bash|json|yaml|css|html|java|go|rust)\n([\s\S]*?)(?=\n## |\n\n[A-Z][a-z]|$)/gi,
+      (_match, lang: string, code: string) =>
+        `\n\`\`\`${lang}\n${code.trimEnd()}\n\`\`\`\n`
+    );
+
+    const processInline = (text: string, key: number) =>
+      text.split(/(\*\*.*?\*\*|`[^`]+`|\[.*?\]\(.*?\))/g).map((part, j) => {
+        if (part.startsWith('**') && part.endsWith('**'))
           return <strong key={j}>{part.slice(2, -2)}</strong>;
-        }
+        if (part.startsWith('`') && part.endsWith('`'))
+          return (
+            <code
+              key={j}
+              className='bg-muted rounded px-1.5 py-0.5 font-mono text-sm'
+            >
+              {part.slice(1, -1)}
+            </code>
+          );
         if (part.startsWith('[') && part.includes('](')) {
-          const match = part.match(/\[(.*?)\]\((.*?)\)/);
-          if (match) {
+          const m = part.match(/\[(.*?)\]\((.*?)\)/);
+          if (m)
             return (
               <a
                 key={j}
-                href={match[2]}
+                href={m[2]}
                 target='_blank'
                 rel='noopener noreferrer'
                 className='text-primary font-medium hover:underline'
               >
-                {match[1]}
+                {m[1]}
               </a>
             );
-          }
         }
         return part;
       });
-    };
 
-    return content.split('\n').map((line, i) => {
-      const trimmedLine = line.trim();
+    // Split content into segments: code blocks vs plain text
+    type Segment =
+      | { type: 'mermaid'; code: string }
+      | { type: 'code'; lang: string; code: string }
+      | { type: 'text'; lines: string[] };
 
-      if (trimmedLine.startsWith('# ')) {
-        return (
-          <h1 key={i} className='text-foreground mt-10 mb-6 text-3xl font-bold'>
-            {line.substring(2)}
-          </h1>
-        );
+    const segments: Segment[] = [];
+    const lines = content.split('\n');
+    let i = 0;
+
+    while (i < lines.length) {
+      const trimmed = lines[i].trim();
+      if (trimmed.startsWith('```')) {
+        const lang = trimmed.slice(3).trim().toLowerCase();
+        const codeLines: string[] = [];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        i++; // consume closing ```
+        if (lang === 'mermaid') {
+          const mermaidCode = codeLines
+            .join('\n')
+            // remove standalone "direction XY" — only valid inside subgraphs
+            .replace(/^\s*direction\s+\w+\s*$/gm, '')
+            // flatten newlines inside node labels [...] to a space
+            .replace(/\[([^\]]*?)\n([^\]]*?)\]/g, '[$1 $2]')
+            .trim();
+          segments.push({ type: 'mermaid', code: mermaidCode });
+        } else {
+          segments.push({ type: 'code', lang, code: codeLines.join('\n') });
+        }
+      } else {
+        // Accumulate plain text lines
+        const last = segments[segments.length - 1];
+        if (last?.type === 'text') {
+          last.lines.push(lines[i]);
+        } else {
+          segments.push({ type: 'text', lines: [lines[i]] });
+        }
+        i++;
       }
-      if (trimmedLine.startsWith('## ')) {
+    }
+
+    return segments.map((seg, si) => {
+      if (seg.type === 'mermaid') {
+        return <MermaidDiagram key={si} chart={seg.code} />;
+      }
+
+      if (seg.type === 'code') {
         return (
-          <h2
-            key={i}
-            className='text-foreground/90 mt-8 mb-4 text-2xl font-bold'
+          <pre
+            key={si}
+            className='bg-muted my-4 overflow-x-auto rounded-xl border p-4 font-mono text-sm leading-relaxed'
           >
-            {line.substring(3)}
-          </h2>
-        );
-      }
-      if (trimmedLine.startsWith('### ')) {
-        return (
-          <h3
-            key={i}
-            className='text-foreground/80 mt-6 mb-3 text-xl font-bold'
-          >
-            {line.substring(4)}
-          </h3>
-        );
-      }
-      if (trimmedLine === '') {
-        return <div key={i} className='h-6' />;
-      }
-      if (trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ')) {
-        // Strip the bullet marker and process the rest
-        const bulletContent = line.trim().substring(2);
-        return (
-          <li
-            key={i}
-            className='text-muted-foreground mb-3 ml-6 list-disc pl-2 leading-relaxed md:text-lg'
-          >
-            {processLine(bulletContent)}
-          </li>
+            <code>{seg.code}</code>
+          </pre>
         );
       }
 
+      // Plain text lines
       return (
-        <p
-          key={i}
-          className='text-muted-foreground mb-6 leading-relaxed md:text-lg'
-        >
-          {processLine(line)}
-        </p>
+        <div key={si}>
+          {seg.lines.map((line, li) => {
+            const t = line.trim();
+            if (t.startsWith('# '))
+              return (
+                <h1
+                  key={li}
+                  className='text-foreground mt-10 mb-6 text-3xl font-bold'
+                >
+                  {processInline(t.slice(2), li)}
+                </h1>
+              );
+            if (t.startsWith('## '))
+              return (
+                <h2
+                  key={li}
+                  className='text-foreground/90 mt-8 mb-4 text-2xl font-bold'
+                >
+                  {processInline(t.slice(3), li)}
+                </h2>
+              );
+            if (t.startsWith('### '))
+              return (
+                <h3
+                  key={li}
+                  className='text-foreground/80 mt-6 mb-3 text-xl font-bold'
+                >
+                  {processInline(t.slice(4), li)}
+                </h3>
+              );
+            if (t === '') return <div key={li} className='h-4' />;
+            if (t.startsWith('- ') || t.startsWith('* '))
+              return (
+                <li
+                  key={li}
+                  className='text-muted-foreground mb-3 ml-6 list-disc pl-2 leading-relaxed md:text-lg'
+                >
+                  {processInline(t.slice(2), li)}
+                </li>
+              );
+            if (/^\d+\.\s/.test(t))
+              return (
+                <li
+                  key={li}
+                  className='text-muted-foreground mb-3 ml-6 list-decimal pl-2 leading-relaxed md:text-lg'
+                >
+                  {processInline(t.replace(/^\d+\.\s/, ''), li)}
+                </li>
+              );
+            if (t.startsWith('> '))
+              return (
+                <blockquote
+                  key={li}
+                  className='border-primary/40 text-muted-foreground my-4 border-l-4 pl-4 italic'
+                >
+                  {processInline(t.slice(2), li)}
+                </blockquote>
+              );
+            return (
+              <p
+                key={li}
+                className='text-muted-foreground mb-6 leading-relaxed md:text-lg'
+              >
+                {processInline(line, li)}
+              </p>
+            );
+          })}
+        </div>
       );
     });
   };
-
+  console.log('Rendering ArticleDetailsView with article:', article);
   return (
     <div className='mx-auto max-w-4xl space-y-8 pb-20'>
       <div className='flex items-center justify-between'>
