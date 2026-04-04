@@ -6,7 +6,11 @@ export default async function ExplorePage() {
   const { userId } = await auth();
 
   return (
-    <PageContainer scrollable>
+    <PageContainer
+      scrollable
+      pageTitle='Explore'
+      pageDescription='Browse and discover content shared by the community.'
+    >
       <ExploreView userId={userId} />
     </PageContainer>
   );
