@@ -14,12 +14,12 @@
         }
     ],
     "share_target": {
-        "action": "/lists",
+        "action": "/lists/share-target",
         "method": "GET",
         "params": {
-            "title": "shareTitle",
-            "text": "shareText",
-            "url": "shareUrl"
+            "title": "title",
+            "text": "text",
+            "url": "url"
         }
     }
 }

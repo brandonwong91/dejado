@@ -78,16 +78,18 @@ function ListsViewInner({
   const [isSuggesting, setIsSuggesting] = useState(false);
 
   useEffect(() => {
+    const sharedTitle = searchParams.get('title');
     const sharedText = searchParams.get('text');
     const sharedUrl = searchParams.get('url');
-    // Mobile OS sometimes puts URL in text or URL.
     const urlPattern = /(https?:\/\/[^\s]+)/;
     if (sharedUrl && urlPattern.test(sharedUrl)) {
       setUrlInput(sharedUrl);
+      if (sharedTitle) setTitleInput(sharedTitle);
       toast.success('Ready to save shared link!');
     } else if (sharedText && urlPattern.test(sharedText)) {
       const match = sharedText.match(urlPattern);
       if (match) setUrlInput(match[0]);
+      if (sharedTitle) setTitleInput(sharedTitle);
       toast.success('Ready to save shared link!');
     }
   }, [searchParams]);
