@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog';
 import Link from 'next/link';
 import { Separator } from '@/components/ui/separator';
+import { LinkPreview } from '@/components/ui/link-preview';
 
 interface List {
   id: string;
@@ -647,6 +648,7 @@ export function ListDetailsView({
                           {displayDomain}
                         </span>
                       </div>
+                      <LinkPreview url={item.url} />
                     </div>
                     {isOwner && (
                       <Button
