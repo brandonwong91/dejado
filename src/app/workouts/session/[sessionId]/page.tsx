@@ -54,7 +54,9 @@ export default async function WorkoutSessionPage({ params }: Props) {
         .select({
           id: exercises.id,
           name: exercises.name,
-          type: exercises.type
+          type: exercises.type,
+          bestScore: exercises.bestScore,
+          lastAttemptedAt: exercises.lastAttemptedAt
         })
         .from(workoutExercises)
         .innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
