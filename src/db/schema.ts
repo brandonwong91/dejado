@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -145,6 +145,33 @@ export const articles = pgTable('articles', {
   userId: text('user_id'), // Optional: could be "system" or a specific user
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
+export const aiCharacters = pgTable('ai_characters', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  universe: text('universe').notNull(),
+  personality: text('personality'),
+  avatarBase64: text('avatar_base64'), // full data URL
+  createdAt: timestamp('created_at').defaultNow().notNull()
+});
+
+export const aiPosts = pgTable('ai_posts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  characterId: uuid('character_id').references(() => aiCharacters.id, {
+    onDelete: 'set null'
+  }),
+  characterName: text('character_name').notNull(),
+  characterUniverse: text('character_universe').notNull(),
+  caption: text('caption').notNull(),
+  hashtags: text('hashtags').notNull().default('[]'), // JSON array
+  imagePrompt: text('image_prompt').notNull(),
+  imageBase64: text('image_base64'), // full data URL
+  isLiked: text('is_liked').default('false').notNull(),
+  likeCount: integer('like_count').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull()
 });
 
 export const interests = pgTable('interests', {
