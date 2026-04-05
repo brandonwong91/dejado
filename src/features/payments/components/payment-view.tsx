@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
+import { sendNotification } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -128,6 +129,42 @@ import { PaymentCalendar } from './payment-calendar';
 export function PaymentView({ payments }: PaymentViewProps) {
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
   const [paidExpanded, setPaidExpanded] = useState(true);
+
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    const unpaid = payments.filter((p) => p.isPaid === 'false');
+    const overdue = unpaid.filter((p) => new Date(p.dueDate) < today);
+    const dueTomorrow = unpaid.filter(() => {
+      // handled per-item below
+      return false;
+    });
+    const dueTomorrowItems = unpaid.filter((p) => {
+      const d = new Date(p.dueDate);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() === tomorrow.getTime();
+    });
+
+    if (overdue.length > 0) {
+      sendNotification(
+        'Overdue Payments',
+        `${overdue.length} payment${overdue.length > 1 ? 's are' : ' is'} overdue.`,
+        'payments-overdue',
+        '/payments'
+      );
+    }
+    if (dueTomorrowItems.length > 0) {
+      sendNotification(
+        'Payments Due Tomorrow',
+        dueTomorrowItems.map((p) => p.name).join(', '),
+        'payments-due-tomorrow',
+        '/payments'
+      );
+    }
+  }, []);
 
   const activePayments = payments.filter((p) => p.isPaid === 'false');
   const paidPayments = payments.filter((p) => p.isPaid === 'true');

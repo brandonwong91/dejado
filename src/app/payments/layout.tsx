@@ -1,4 +1,5 @@
 import DashboardLayoutView from '@/components/layout/dashboard-layout';
+import { NotificationPrompt } from '@/components/layout/notification-prompt';
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 
@@ -17,6 +18,7 @@ export default async function PaymentsLayout({
 
   return (
     <DashboardLayoutView defaultOpen={defaultOpen}>
+      <NotificationPrompt />
       {children}
     </DashboardLayoutView>
   );

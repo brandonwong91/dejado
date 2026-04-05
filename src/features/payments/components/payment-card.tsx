@@ -14,6 +14,7 @@ import {
   RefreshCwIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { sendNotification } from '@/lib/notifications';
 import {
   deletePaymentAction,
   renewPaymentAction,
@@ -57,9 +58,17 @@ export function PaymentCard({ payment }: PaymentCardProps) {
   async function handleToggle() {
     try {
       await togglePaymentStatusAction(payment.id, !isPaid);
-      toast.success(
-        isPaid ? 'Payment marked as unpaid' : 'Payment marked as paid'
-      );
+      if (!isPaid) {
+        toast.success('Payment marked as paid');
+        await sendNotification(
+          'Payment Logged',
+          `${payment.name} — ${payment.amount} ${payment.currency} marked as paid.`,
+          `payment-paid-${payment.id}`,
+          '/payments'
+        );
+      } else {
+        toast.success('Payment marked as unpaid');
+      }
     } catch (error) {
       toast.error('Failed to update status');
     }
@@ -179,6 +188,12 @@ export function PaymentCard({ payment }: PaymentCardProps) {
                   try {
                     await renewPaymentAction(payment.id);
                     toast.success('Payment renewed for the next cycle');
+                    await sendNotification(
+                      'Payment Renewed',
+                      `${payment.name} has been scheduled for the next cycle.`,
+                      `payment-renewed-${payment.id}`,
+                      '/payments'
+                    );
                   } catch (error) {
                     toast.error('Failed to renew payment');
                   }

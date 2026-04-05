@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 import { completeWorkoutSessionAction } from '../actions';
+import { sendNotification } from '@/lib/notifications';
 import { RestTimer } from './rest-timer';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -129,7 +130,7 @@ export function WorkoutSessionView({
     if (!sessionId) return;
     try {
       setLoading(true);
-      await completeWorkoutSessionAction(
+      const result = await completeWorkoutSessionAction(
         sessionId,
         sessionSets.map((s) => ({
           exerciseId: s.exerciseId,
@@ -137,6 +138,14 @@ export function WorkoutSessionView({
           reps: s.reps
         }))
       );
+      for (const pr of result.newPRs) {
+        await sendNotification(
+          'New Personal Record!',
+          `${pr.exerciseName}: ${pr.score}`,
+          `pr-${pr.exerciseName}`,
+          '/workouts'
+        );
+      }
       toast.success('Workout completed!');
       router.push('/workouts');
     } catch (error) {

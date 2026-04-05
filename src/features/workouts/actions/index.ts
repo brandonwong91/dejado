@@ -157,19 +157,34 @@ export async function startWorkoutSessionAction(
   return session.id;
 }
 
+function isScoreBetter(
+  newScore: string,
+  oldScore: string | null | undefined
+): boolean {
+  if (!oldScore) return true; // first attempt is always a PR
+  const parse = (s: string) => {
+    const m = s.match(/^([\d.]+)kg x (\d+)$/);
+    return m ? { weight: parseFloat(m[1]), reps: parseInt(m[2]) } : null;
+  };
+  const n = parse(newScore);
+  const o = parse(oldScore);
+  if (!n || !o) return false;
+  return n.weight > o.weight || (n.weight === o.weight && n.reps > o.reps);
+}
+
 export async function completeWorkoutSessionAction(
   sessionId: string,
   sets: { exerciseId: string; weight: string; reps: string }[]
-) {
+): Promise<{ newPRs: Array<{ exerciseName: string; score: string }> }> {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
   await db
     .update(workoutSessions)
-    .set({
-      completedAt: new Date()
-    })
+    .set({ completedAt: new Date() })
     .where(eq(workoutSessions.id, sessionId));
+
+  const newPRs: Array<{ exerciseName: string; score: string }> = [];
 
   if (sets.length > 0) {
     await db.insert(exerciseSets).values(
@@ -182,19 +197,48 @@ export async function completeWorkoutSessionAction(
       }))
     );
 
-    // Update best scores and last attempted for each exercise
+    // Track best score per exercise across this session (avoid N duplicate DB writes)
+    const bestPerExercise = new Map<
+      string,
+      { score: string; name: string; currentBest: string | null }
+    >();
+
     for (const set of sets) {
       const score = `${set.weight}kg x ${set.reps}`;
+      const existing = bestPerExercise.get(set.exerciseId);
+      if (!existing || isScoreBetter(score, existing.score)) {
+        // Fetch current DB best only on first encounter per exercise
+        if (!existing) {
+          const [row] = await db
+            .select({ bestScore: exercises.bestScore, name: exercises.name })
+            .from(exercises)
+            .where(eq(exercises.id, set.exerciseId));
+          bestPerExercise.set(set.exerciseId, {
+            score,
+            name: row?.name ?? set.exerciseId,
+            currentBest: row?.bestScore ?? null
+          });
+        } else {
+          bestPerExercise.set(set.exerciseId, { ...existing, score });
+        }
+      }
+    }
+
+    for (const [exerciseId, { score, name, currentBest }] of Array.from(
+      bestPerExercise
+    )) {
+      const pr = isScoreBetter(score, currentBest);
       await db
         .update(exercises)
         .set({
           lastAttemptedAt: new Date(),
-          // Simple best score logic: for now just update it
-          bestScore: score
+          ...(pr ? { bestScore: score } : {})
         })
-        .where(eq(exercises.id, set.exerciseId));
+        .where(eq(exercises.id, exerciseId));
+      if (pr) newPRs.push({ exerciseName: name, score });
     }
   }
 
   revalidatePath('/workouts');
+  return { newPRs };
 }

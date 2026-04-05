@@ -11,7 +11,8 @@ import {
   ShoppingCartIcon,
   PackageIcon
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { sendNotification } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
 
 interface Purchase {
@@ -34,6 +35,29 @@ interface PurchaseViewProps {
 export function PurchaseView({ purchases }: PurchaseViewProps) {
   const [toBuyExpanded, setToBuyExpanded] = useState(true);
   const [boughtExpanded, setBoughtExpanded] = useState(true);
+
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    const dueSoon = purchases.filter((p) => {
+      if (p.isBought === 'true' || !p.dueDate) return false;
+      const d = new Date(p.dueDate);
+      d.setHours(0, 0, 0, 0);
+      return d <= tomorrow;
+    });
+
+    if (dueSoon.length > 0) {
+      sendNotification(
+        'Restocking Reminder',
+        `${dueSoon.map((p) => p.name).join(', ')} — time to restock.`,
+        'purchases-due-soon',
+        '/purchases'
+      );
+    }
+  }, []);
 
   const filterItems = (cat: string, isBought: boolean) => {
     return purchases.filter(

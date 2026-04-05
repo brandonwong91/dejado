@@ -23,14 +23,23 @@ serwist.addEventListeners();
 
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close();
+  const targetUrl: string =
+    (event.notification.data as { url?: string })?.url ?? '/';
+
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
         for (const client of clientList) {
-          if ('focus' in client) return client.focus();
+          if (
+            client.url.includes(self.location.origin) &&
+            'navigate' in client
+          ) {
+            (client as WindowClient).navigate(targetUrl);
+            return client.focus();
+          }
         }
-        return self.clients.openWindow('/workouts');
+        return self.clients.openWindow(targetUrl);
       })
   );
 });

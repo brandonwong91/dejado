@@ -25,10 +25,10 @@ function extractLanguage(className?: string): string {
 }
 
 const INITIAL_COMPONENTS: Partial<Components> = {
-  code: function CodeComponent({ className, children, ...props }) {
+  code: function CodeComponent({ className, children, node }) {
     const isInline =
-      !props.node?.position?.start.line ||
-      props.node?.position?.start.line === props.node?.position?.end.line;
+      !node?.position?.start.line ||
+      node?.position?.start.line === node?.position?.end.line;
 
     if (isInline) {
       return (
@@ -37,7 +37,6 @@ const INITIAL_COMPONENTS: Partial<Components> = {
             'bg-primary-foreground rounded-sm px-1 font-mono text-sm',
             className
           )}
-          {...props}
         >
           {children}
         </span>
