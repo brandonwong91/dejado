@@ -20,3 +20,17 @@ const serwist = new Serwist({
 });
 
 serwist.addEventListeners();
+
+self.addEventListener('notificationclick', (event: NotificationEvent) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if ('focus' in client) return client.focus();
+        }
+        return self.clients.openWindow('/workouts');
+      })
+  );
+});

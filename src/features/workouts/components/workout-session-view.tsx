@@ -17,9 +17,12 @@ import {
   PlusIcon,
   CheckCircle2Icon,
   ArrowLeftIcon,
-  TimerIcon
+  TimerIcon,
+  TrophyIcon
 } from 'lucide-react';
+import { differenceInDays } from 'date-fns';
 import { completeWorkoutSessionAction } from '../actions';
+import { RestTimer } from './rest-timer';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -29,6 +32,8 @@ interface Exercise {
   id: string;
   name: string;
   type: string;
+  bestScore: string | null;
+  lastAttemptedAt: Date | null;
 }
 
 interface Workout {
@@ -182,7 +187,30 @@ export function WorkoutSessionView({
             >
               <CardHeader className='bg-muted/20 pb-4'>
                 <div className='flex items-center justify-between'>
-                  <CardTitle className='text-lg font-bold'>{ex.name}</CardTitle>
+                  <div className='space-y-1'>
+                    <CardTitle className='text-lg font-bold'>
+                      {ex.name}
+                    </CardTitle>
+                    {ex.bestScore && (
+                      <div className='text-muted-foreground flex items-center gap-2 text-xs'>
+                        <TrophyIcon className='size-3 text-yellow-500' />
+                        <span className='font-medium'>{ex.bestScore}</span>
+                        {ex.lastAttemptedAt && (
+                          <>
+                            <span className='opacity-40'>·</span>
+                            <span>
+                              {differenceInDays(
+                                new Date(),
+                                ex.lastAttemptedAt
+                              ) === 0
+                                ? 'today'
+                                : `${differenceInDays(new Date(), ex.lastAttemptedAt)}d ago`}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <Badge
                     variant='secondary'
                     className='text-[10px] tracking-wider uppercase'
@@ -292,6 +320,8 @@ export function WorkoutSessionView({
           );
         })}
       </div>
+
+      <RestTimer />
 
       <div className='bg-background/80 fixed right-0 bottom-0 left-0 z-50 border-t p-4 backdrop-blur-lg sm:static sm:border-none sm:bg-transparent sm:p-0 sm:backdrop-blur-none'>
         <div className='mx-auto max-w-2xl'>
