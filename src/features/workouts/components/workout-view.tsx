@@ -5,6 +5,7 @@ import { sendNotification } from '@/lib/notifications';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { WorkoutCalendar } from '@/features/workouts/components/workout-calendar';
+import { WorkoutAIRecommendation } from '@/features/workouts/components/workout-ai-recommendation';
 import { WorkoutCard } from '@/features/workouts/components/workout-card';
 import { ExerciseCard } from '@/features/workouts/components/exercise-card';
 import { ExerciseDialog } from '@/features/workouts/components/exercise-dialog';
@@ -77,15 +78,18 @@ export function WorkoutView({
       <div className='flex flex-col gap-8 lg:flex-row'>
         {/* Sidebar Panel */}
         <aside className='w-full lg:w-[350px] lg:shrink-0'>
-          <div className='sticky top-4 space-y-4'>
-            <div className='px-1'>
-              <h3 className='text-muted-foreground text-xs font-semibold tracking-wider uppercase'>
-                Training History
-              </h3>
+          <div className='sticky top-4 space-y-6'>
+            <div className='space-y-4'>
+              <div className='px-1'>
+                <h3 className='text-muted-foreground text-xs font-semibold tracking-wider uppercase'>
+                  Training History
+                </h3>
+              </div>
+              <div className='flex justify-center'>
+                <WorkoutCalendar sessions={sessions} />
+              </div>
             </div>
-            <div className='flex justify-center'>
-              <WorkoutCalendar sessions={sessions} />
-            </div>
+            <WorkoutAIRecommendation />
           </div>
         </aside>
 

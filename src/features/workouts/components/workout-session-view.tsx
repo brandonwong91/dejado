@@ -17,10 +17,11 @@ import {
   PlusIcon,
   CheckCircle2Icon,
   ArrowLeftIcon,
-  TimerIcon,
-  TrophyIcon
+  TrophyIcon,
+  TargetIcon
 } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
+import { getProgressionTarget } from '../utils/progression';
 import { completeWorkoutSessionAction } from '../actions';
 import { sendNotification } from '@/lib/notifications';
 import { RestTimer } from './rest-timer';
@@ -189,6 +190,8 @@ export function WorkoutSessionView({
           const sets = sessionSets.filter((s) => s.exerciseId === ex.id);
           const pending = pendingInputs[ex.id] || { weight: '', reps: '' };
 
+          const progression = getProgressionTarget(ex.bestScore, ex.type);
+
           return (
             <Card
               key={ex.id}
@@ -217,6 +220,20 @@ export function WorkoutSessionView({
                             </span>
                           </>
                         )}
+                      </div>
+                    )}
+                    {progression && (
+                      <div className='text-primary flex items-center gap-2 text-xs'>
+                        <TargetIcon className='size-3 shrink-0' />
+                        <span className='font-semibold'>
+                          {progression.weight
+                            ? `${progression.weight} × ${progression.reps} reps`
+                            : `${progression.reps} reps`}{' '}
+                          · {progression.sets} sets
+                        </span>
+                        <span className='text-muted-foreground opacity-70'>
+                          — {progression.note}
+                        </span>
                       </div>
                     )}
                   </div>

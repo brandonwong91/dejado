@@ -10,7 +10,8 @@ import {
 } from '@/db/schema';
 import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc, isNotNull } from 'drizzle-orm';
+import { differenceInDays } from 'date-fns';
 
 // Exercise Actions
 export async function createExerciseAction(data: {
@@ -241,4 +242,151 @@ export async function completeWorkoutSessionAction(
 
   revalidatePath('/workouts');
   return { newPRs };
+}
+
+// ── AI Workout Recommendation ────────────────────────────────────────────────
+
+async function callPollinationsText(prompt: string): Promise<string> {
+  try {
+    const res = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: prompt }],
+        model: 'openai',
+        jsonMode: true,
+        temperature: 0.7
+      }),
+      signal: AbortSignal.timeout(30_000)
+    });
+    if (!res.ok) return '';
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export interface WorkoutRecommendation {
+  suggestedWorkoutId: string | null;
+  suggestedWorkoutName: string;
+  reasoning: string;
+  focusAreas: string[];
+}
+
+export async function getWorkoutRecommendationAction(): Promise<WorkoutRecommendation | null> {
+  const { userId } = await auth();
+  if (!userId) return null;
+
+  // Fetch workouts + their exercises in one join
+  const rows = await db
+    .select({
+      workoutId: workouts.id,
+      workoutName: workouts.name,
+      scheduledDays: workouts.scheduledDays,
+      exerciseName: exercises.name
+    })
+    .from(workouts)
+    .leftJoin(workoutExercises, eq(workoutExercises.workoutId, workouts.id))
+    .leftJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
+    .where(eq(workouts.userId, userId));
+
+  if (rows.length === 0) return null;
+
+  // Group into routines map
+  const routineMap = new Map<
+    string,
+    { name: string; scheduledDays: string | null; exerciseNames: string[] }
+  >();
+  for (const row of rows) {
+    if (!routineMap.has(row.workoutId)) {
+      routineMap.set(row.workoutId, {
+        name: row.workoutName,
+        scheduledDays: row.scheduledDays,
+        exerciseNames: []
+      });
+    }
+    if (row.exerciseName) {
+      routineMap.get(row.workoutId)!.exerciseNames.push(row.exerciseName);
+    }
+  }
+
+  // Fetch last 10 completed sessions
+  const recentSessions = await db
+    .select({
+      workoutId: workoutSessions.workoutId,
+      workoutName: workoutSessions.workoutName,
+      completedAt: workoutSessions.completedAt
+    })
+    .from(workoutSessions)
+    .where(
+      and(
+        eq(workoutSessions.userId, userId),
+        isNotNull(workoutSessions.completedAt)
+      )
+    )
+    .orderBy(desc(workoutSessions.completedAt))
+    .limit(10);
+
+  const today = new Date();
+  const todayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][
+    today.getDay()
+  ];
+
+  const routinesSummary = Array.from(routineMap.entries())
+    .map(([, r]) => {
+      const days = r.scheduledDays ? ` (scheduled: ${r.scheduledDays})` : '';
+      const exList =
+        r.exerciseNames.length > 0
+          ? r.exerciseNames.join(', ')
+          : 'no exercises';
+      return `- ${r.name}${days}: ${exList}`;
+    })
+    .join('\n');
+
+  const sessionsSummary =
+    recentSessions.length > 0
+      ? recentSessions
+          .map((s) => {
+            const daysAgo = differenceInDays(today, s.completedAt!);
+            const label = daysAgo === 0 ? 'today' : `${daysAgo}d ago`;
+            return `- ${s.workoutName ?? 'Unknown'} — ${label}`;
+          })
+          .join('\n')
+      : 'No sessions recorded yet';
+
+  const prompt = `You are an expert fitness coach specialising in hypertrophy (muscle growth).
+Today is ${todayName}, ${today.toDateString()}.
+
+The user's workout routines:
+${routinesSummary}
+
+Recent completed sessions (newest first):
+${sessionsSummary}
+
+Based on muscle group recovery (48–72h), frequency balance (2×/week per group), and hypertrophy principles, recommend the single best workout to do today.
+
+Return ONLY a raw JSON object with no markdown:
+{
+  "workoutName": "<exact name from the routines list above>",
+  "reasoning": "<2–3 sentences explaining the choice based on recovery and progression>",
+  "focusAreas": ["<muscle group 1>", "<muscle group 2>"]
+}`;
+
+  const raw = await callPollinationsText(prompt);
+  try {
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    const name: string = parsed.workoutName ?? '';
+    const matchedEntry = Array.from(routineMap.entries()).find(
+      ([, r]) => r.name.toLowerCase() === name.toLowerCase()
+    );
+    return {
+      suggestedWorkoutId: matchedEntry ? matchedEntry[0] : null,
+      suggestedWorkoutName: name,
+      reasoning: parsed.reasoning ?? '',
+      focusAreas: Array.isArray(parsed.focusAreas) ? parsed.focusAreas : []
+    };
+  } catch {
+    return null;
+  }
 }
