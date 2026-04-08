@@ -43,7 +43,8 @@ import {
   IconList,
   IconSearch,
   IconNews,
-  IconSparkles
+  IconSparkles,
+  IconPuzzle
 } from '@tabler/icons-react';
 
 export type Icon = React.ComponentType<IconProps>;
@@ -94,5 +95,6 @@ export const Icons = {
   list: IconList,
   search: IconSearch,
   article: IconNews,
-  aiFeed: IconSparkles
+  aiFeed: IconSparkles,
+  puzzle: IconPuzzle
 };
