@@ -82,6 +82,14 @@ export const navItems: NavItem[] = [
     items: []
   },
   {
+    title: 'AI Games',
+    url: '/ai/games',
+    icon: 'puzzle',
+    shortcut: ['a', 'g'],
+    isActive: false,
+    items: []
+  },
+  {
     title: 'Explore',
     url: '/explore',
     icon: 'search',
