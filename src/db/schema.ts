@@ -1,4 +1,11 @@
-import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  uniqueIndex
+} from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -181,3 +188,26 @@ export const interests = pgTable('interests', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
+
+export const dailyWords = pgTable('daily_words', {
+  date: text('date').notNull().unique(),
+  word: text('word').notNull(),
+  category: text('category').notNull(),
+  openingRiddle: text('opening_riddle').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+});
+
+export const dailyPlays = pgTable(
+  'daily_plays',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id').notNull(),
+    date: text('date').notNull(),
+    guesses: text('guesses').notNull().default('[]'), // JSON-serialized Guess[]
+    status: text('status').notNull().default('playing'), // 'playing' | 'won' | 'lost'
+    createdAt: timestamp('created_at').defaultNow().notNull()
+  },
+  (table) => [
+    uniqueIndex('daily_plays_user_date_idx').on(table.userId, table.date)
+  ]
+);
