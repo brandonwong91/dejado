@@ -1,3 +1,5 @@
+export const MAX_GUESSES = 10;
+
 export type Temperature =
   | 'Frozen'
   | 'Cold'
