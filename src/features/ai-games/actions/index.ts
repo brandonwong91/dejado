@@ -126,6 +126,8 @@ export async function startGameAction(): Promise<{
     } else {
       dailyWord = inserted;
     }
+    if (!dailyWord)
+      throw new Error('Failed to get or create daily word for today');
   }
 
   // 2. Get or create this user's play record for today
@@ -151,6 +153,7 @@ export async function startGameAction(): Promise<{
     } else {
       play = inserted;
     }
+    if (!play) throw new Error('Failed to get or create play record for today');
   }
 
   const existingGuesses: Guess[] = JSON.parse(play.guesses ?? '[]');
