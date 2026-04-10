@@ -5,8 +5,7 @@ import { Loader2Icon, PuzzleIcon, RotateCcwIcon, SendIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { startGameAction, evaluateGuessAction } from '../actions';
 import type { GameState, Guess, Temperature } from '../types';
-
-const MAX_GUESSES = 10;
+import { MAX_GUESSES } from '../types';
 
 const TEMP_CONFIG: Record<
   Temperature,
@@ -146,12 +145,14 @@ export function GameView() {
       setGame({ ...INITIAL_STATE, status: 'loading' });
       try {
         const result = await startGameAction();
+        // existingGuesses from DB are chronological (oldest-first); reverse for display (newest-first)
+        const displayGuesses = [...result.existingGuesses].reverse();
         setGame({
-          status: 'playing',
+          status: result.status,
           secretWord: result.word,
           category: result.category,
           openingRiddle: result.openingRiddle,
-          guesses: [],
+          guesses: displayGuesses,
           maxGuesses: MAX_GUESSES
         });
       } catch {
@@ -173,18 +174,19 @@ export function GameView() {
     evaluateTransition(async () => {
       setGame((prev) => ({ ...prev, status: 'evaluating' }));
       try {
-        const result = await evaluateGuessAction(game.secretWord, word);
+        // Display guesses are newest-first; server expects oldest-first (chronological)
+        const previousGuessesChronological = [...game.guesses].reverse();
+        const result = await evaluateGuessAction(
+          game.secretWord,
+          word,
+          previousGuessesChronological
+        );
         const newGuess: Guess = { word, ...result };
-        setGame((prev) => {
-          const guesses = [newGuess, ...prev.guesses];
-          const won = result.score >= 10 || result.temperature === 'On fire!';
-          const lost = !won && guesses.length >= MAX_GUESSES;
-          return {
-            ...prev,
-            status: won ? 'won' : lost ? 'lost' : 'playing',
-            guesses
-          };
-        });
+        setGame((prev) => ({
+          ...prev,
+          status: result.status,
+          guesses: [newGuess, ...prev.guesses]
+        }));
       } catch {
         toast.error('Failed to evaluate guess. Please try again.');
         setGame((prev) => ({ ...prev, status: 'playing' }));
