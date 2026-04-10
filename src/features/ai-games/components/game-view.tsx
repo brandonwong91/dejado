@@ -1,11 +1,15 @@
 'use client';
 
 import { useState, useTransition, useRef, useEffect } from 'react';
-import { Loader2Icon, PuzzleIcon, RotateCcwIcon, SendIcon } from 'lucide-react';
+import { Loader2Icon, PuzzleIcon, SendIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { startGameAction, evaluateGuessAction } from '../actions';
-import type { GameState, Guess, Temperature } from '../types';
-import { MAX_GUESSES } from '../types';
+import {
+  type GameState,
+  type Guess,
+  type Temperature,
+  MAX_GUESSES
+} from '../types';
 
 const TEMP_CONFIG: Record<
   Temperature,
@@ -111,6 +115,30 @@ function GuessRow({ guess, index }: { guess: Guess; index: number }) {
   );
 }
 
+function MidnightCountdown() {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    function update() {
+      const now = new Date();
+      const midnight = new Date();
+      midnight.setUTCHours(24, 0, 0, 0);
+      const diff = midnight.getTime() - now.getTime();
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setTimeLeft(
+        `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
+      );
+    }
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return <span className='font-mono tabular-nums'>{timeLeft}</span>;
+}
+
 const INITIAL_STATE: GameState = {
   status: 'idle',
   secretWord: '',
@@ -145,7 +173,6 @@ export function GameView() {
       setGame({ ...INITIAL_STATE, status: 'loading' });
       try {
         const result = await startGameAction();
-        // existingGuesses from DB are chronological (oldest-first); reverse for display (newest-first)
         const displayGuesses = [...result.existingGuesses].reverse();
         setGame({
           status: result.status,
@@ -174,14 +201,18 @@ export function GameView() {
     evaluateTransition(async () => {
       setGame((prev) => ({ ...prev, status: 'evaluating' }));
       try {
-        // Display guesses are newest-first; server expects oldest-first (chronological)
         const previousGuessesChronological = [...game.guesses].reverse();
         const result = await evaluateGuessAction(
           game.secretWord,
           word,
           previousGuessesChronological
         );
-        const newGuess: Guess = { word, ...result };
+        const newGuess: Guess = {
+          word,
+          score: result.score,
+          temperature: result.temperature,
+          hint: result.hint
+        };
         setGame((prev) => ({
           ...prev,
           status: result.status,
@@ -262,13 +293,12 @@ export function GameView() {
             .
           </p>
         </div>
-        <button
-          onClick={handleStart}
-          className='bg-primary text-primary-foreground hover:bg-primary/90 flex w-full items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-colors'
-        >
-          <RotateCcwIcon className='size-4' />
-          Play Again
-        </button>
+        <div className='space-y-1 rounded-xl border border-dashed p-4 text-center'>
+          <p className='text-muted-foreground text-sm'>Next puzzle in</p>
+          <p className='text-2xl font-bold'>
+            <MidnightCountdown />
+          </p>
+        </div>
         <div className='space-y-2' ref={guessListRef}>
           {game.guesses.map((g, i) => (
             <GuessRow
@@ -299,13 +329,12 @@ export function GameView() {
             .
           </p>
         </div>
-        <button
-          onClick={handleStart}
-          className='bg-primary text-primary-foreground hover:bg-primary/90 flex w-full items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-colors'
-        >
-          <RotateCcwIcon className='size-4' />
-          Play Again
-        </button>
+        <div className='space-y-1 rounded-xl border border-dashed p-4 text-center'>
+          <p className='text-muted-foreground text-sm'>Next puzzle in</p>
+          <p className='text-2xl font-bold'>
+            <MidnightCountdown />
+          </p>
+        </div>
         <div className='space-y-2'>
           {game.guesses.map((g, i) => (
             <GuessRow
