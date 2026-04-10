@@ -35,6 +35,7 @@ export function RestTimer() {
   const [done, setDone] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const endTimeRef = useRef<number | null>(null);
 
   // Sync timeLeft when preset changes and timer is idle
   useEffect(() => {
@@ -46,17 +47,18 @@ export function RestTimer() {
   useEffect(() => {
     if (running) {
       intervalRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(intervalRef.current!);
-            setRunning(false);
-            setDone(true);
-            fireNotification();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+        if (!endTimeRef.current) return;
+        const remaining = Math.ceil((endTimeRef.current - Date.now()) / 1000);
+        if (remaining <= 0) {
+          clearInterval(intervalRef.current!);
+          setTimeLeft(0);
+          setRunning(false);
+          setDone(true);
+          fireNotification();
+        } else {
+          setTimeLeft(remaining);
+        }
+      }, 500);
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -89,17 +91,22 @@ export function RestTimer() {
     if (Notification.permission === 'default') {
       Notification.requestPermission();
     }
+    endTimeRef.current = Date.now() + timeLeft * 1000;
     setDone(false);
     setRunning(true);
     setExpanded(false);
   };
 
-  const pause = () => setRunning(false);
+  const pause = () => {
+    setRunning(false);
+    endTimeRef.current = null;
+  };
 
   const reset = () => {
     setRunning(false);
     setDone(false);
     setTimeLeft(presetSeconds);
+    endTimeRef.current = null;
   };
 
   const selectPreset = (s: number) => {
@@ -107,6 +114,7 @@ export function RestTimer() {
     setRunning(false);
     setDone(false);
     setTimeLeft(s);
+    endTimeRef.current = null;
   };
 
   const progress = running || done ? 1 - timeLeft / presetSeconds : 0;
