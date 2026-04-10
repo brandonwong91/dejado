@@ -1,7 +1,16 @@
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
-import { Temperature } from '../types';
+import { eq, and } from 'drizzle-orm';
+import { db } from '@/db';
+import { dailyWords, dailyPlays } from '@/db/schema';
+import { type Temperature, type Guess, MAX_GUESSES } from '../types';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 async function callPollinations(prompt: string, retries = 2): Promise<string> {
   const apiUrl = 'https://gen.pollinations.ai/v1/chat/completions';
@@ -38,14 +47,11 @@ async function callPollinations(prompt: string, retries = 2): Promise<string> {
   return '';
 }
 
-export async function startGameAction(): Promise<{
+async function generateDailyWord(): Promise<{
   word: string;
   category: string;
   openingRiddle: string;
 }> {
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
   const prompt = `Pick a secret concept word for a word-guessing game.
 Requirements: common English noun or adjective, rich semantic neighborhood, not too obscure, not too obvious. Vary across: emotions, nature, science, culture, objects, places.
 Return ONLY valid JSON (no markdown, no extra text):
@@ -70,13 +76,130 @@ Return ONLY valid JSON (no markdown, no extra text):
   }
 }
 
-export async function evaluateGuessAction(
-  secretWord: string,
-  guess: string
-): Promise<{ score: number; temperature: Temperature; hint: string }> {
+function scoreToTemperature(score: number): Temperature {
+  if (score <= 2) return 'Frozen';
+  if (score === 3) return 'Cold';
+  if (score === 4) return 'Cool';
+  if (score === 5) return 'Lukewarm';
+  if (score <= 7) return 'Warm';
+  if (score === 8) return 'Hot';
+  if (score === 9) return 'Scorching';
+  return 'On fire!';
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+
+export async function startGameAction(): Promise<{
+  word: string;
+  category: string;
+  openingRiddle: string;
+  existingGuesses: Guess[];
+  status: 'playing' | 'won' | 'lost';
+}> {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
+  const today = todayUTC();
+
+  // 1. Get or create today's daily word
+  let [dailyWord] = await db
+    .select()
+    .from(dailyWords)
+    .where(eq(dailyWords.date, today))
+    .limit(1);
+
+  if (!dailyWord) {
+    const generated = await generateDailyWord();
+    const [inserted] = await db
+      .insert(dailyWords)
+      .values({ date: today, ...generated })
+      .onConflictDoNothing()
+      .returning();
+
+    if (!inserted) {
+      // Another request beat us to it — fetch the existing row
+      [dailyWord] = await db
+        .select()
+        .from(dailyWords)
+        .where(eq(dailyWords.date, today))
+        .limit(1);
+    } else {
+      dailyWord = inserted;
+    }
+    if (!dailyWord)
+      throw new Error('Failed to get or create daily word for today');
+  }
+
+  // 2. Get or create this user's play record for today
+  let [play] = await db
+    .select()
+    .from(dailyPlays)
+    .where(and(eq(dailyPlays.userId, userId), eq(dailyPlays.date, today)))
+    .limit(1);
+
+  if (!play) {
+    const [inserted] = await db
+      .insert(dailyPlays)
+      .values({ userId, date: today, guesses: '[]', status: 'playing' })
+      .onConflictDoNothing()
+      .returning();
+
+    if (!inserted) {
+      [play] = await db
+        .select()
+        .from(dailyPlays)
+        .where(and(eq(dailyPlays.userId, userId), eq(dailyPlays.date, today)))
+        .limit(1);
+    } else {
+      play = inserted;
+    }
+    if (!play) throw new Error('Failed to get or create play record for today');
+  }
+
+  const existingGuesses: Guess[] = JSON.parse(play.guesses ?? '[]');
+  const rawStatus = play.status;
+  const status: 'playing' | 'won' | 'lost' =
+    rawStatus === 'won' || rawStatus === 'lost' ? rawStatus : 'playing';
+
+  return {
+    word: dailyWord.word,
+    category: dailyWord.category,
+    openingRiddle: dailyWord.openingRiddle,
+    existingGuesses,
+    status
+  };
+}
+
+export async function evaluateGuessAction(
+  secretWord: string,
+  guess: string
+): Promise<{
+  score: number;
+  temperature: Temperature;
+  hint: string;
+  status: 'playing' | 'won' | 'lost';
+}> {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const today = todayUTC();
+
+  // Fetch the authoritative play record from DB
+  const [play] = await db
+    .select()
+    .from(dailyPlays)
+    .where(and(eq(dailyPlays.userId, userId), eq(dailyPlays.date, today)))
+    .limit(1);
+
+  if (!play) throw new Error('No play record found for today');
+
+  // Guard against re-evaluating a completed game
+  const currentStatus = play.status as 'playing' | 'won' | 'lost';
+  if (currentStatus !== 'playing') {
+    return { score: 0, temperature: 'Frozen', hint: '', status: currentStatus };
+  }
+
+  const previousGuesses: Guess[] = JSON.parse(play.guesses ?? '[]');
   const cleanGuess = guess.toLowerCase().trim();
 
   const prompt = `You are the judge in a word-guessing game. Secret word: "${secretWord}". Player guessed: "${cleanGuess}".
@@ -99,33 +222,45 @@ Return ONLY valid JSON (no markdown):
     'On fire!'
   ];
 
+  let score = 1;
+  let temperature: Temperature = 'Frozen';
+  let hint = 'The oracle remains silent on this one.';
+
   try {
     const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
-    const score = Math.min(10, Math.max(1, Number(parsed.score) || 1));
-    const temperature: Temperature = VALID_TEMPS.includes(parsed.temperature)
+    score = Math.min(10, Math.max(1, Number(parsed.score) || 1));
+    temperature = VALID_TEMPS.includes(parsed.temperature)
       ? parsed.temperature
       : scoreToTemperature(score);
-    return {
-      score,
-      temperature,
-      hint: parsed.hint ?? 'The oracle remains silent on this one.'
-    };
+    hint = parsed.hint ?? hint;
   } catch {
-    return {
-      score: 1,
-      temperature: 'Frozen',
-      hint: 'The oracle could not read your guess.'
-    };
+    score = 1;
+    temperature = 'Frozen';
+    hint = 'The oracle could not read your guess.';
   }
-}
 
-function scoreToTemperature(score: number): Temperature {
-  if (score <= 2) return 'Frozen';
-  if (score === 3) return 'Cold';
-  if (score === 4) return 'Cool';
-  if (score === 5) return 'Lukewarm';
-  if (score <= 7) return 'Warm';
-  if (score === 8) return 'Hot';
-  if (score === 9) return 'Scorching';
-  return 'On fire!';
+  // Determine new status
+  const won = score >= 10 || temperature === 'On fire!';
+  const newGuessCount = previousGuesses.length + 1;
+  const lost = !won && newGuessCount >= MAX_GUESSES;
+  const newStatus: 'playing' | 'won' | 'lost' = won
+    ? 'won'
+    : lost
+      ? 'lost'
+      : 'playing';
+
+  // Build updated guesses array (chronological order for storage)
+  const newGuess: Guess = { word: cleanGuess, score, temperature, hint };
+  const updatedGuesses: Guess[] = [...previousGuesses, newGuess];
+
+  // Update the play record
+  await db
+    .update(dailyPlays)
+    .set({
+      guesses: JSON.stringify(updatedGuesses),
+      status: newStatus
+    })
+    .where(and(eq(dailyPlays.userId, userId), eq(dailyPlays.date, today)));
+
+  return { score, temperature, hint, status: newStatus };
 }
