@@ -157,7 +157,9 @@ export async function startGameAction(): Promise<{
   }
 
   const existingGuesses: Guess[] = JSON.parse(play.guesses ?? '[]');
-  const status = play.status as 'playing' | 'won' | 'lost';
+  const rawStatus = play.status;
+  const status: 'playing' | 'won' | 'lost' =
+    rawStatus === 'won' || rawStatus === 'lost' ? rawStatus : 'playing';
 
   return {
     word: dailyWord.word,
@@ -170,8 +172,7 @@ export async function startGameAction(): Promise<{
 
 export async function evaluateGuessAction(
   secretWord: string,
-  guess: string,
-  previousGuesses: Guess[]
+  guess: string
 ): Promise<{
   score: number;
   temperature: Temperature;
@@ -181,6 +182,24 @@ export async function evaluateGuessAction(
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
+  const today = todayUTC();
+
+  // Fetch the authoritative play record from DB
+  const [play] = await db
+    .select()
+    .from(dailyPlays)
+    .where(and(eq(dailyPlays.userId, userId), eq(dailyPlays.date, today)))
+    .limit(1);
+
+  if (!play) throw new Error('No play record found for today');
+
+  // Guard against re-evaluating a completed game
+  const currentStatus = play.status as 'playing' | 'won' | 'lost';
+  if (currentStatus !== 'playing') {
+    return { score: 0, temperature: 'Frozen', hint: '', status: currentStatus };
+  }
+
+  const previousGuesses: Guess[] = JSON.parse(play.guesses ?? '[]');
   const cleanGuess = guess.toLowerCase().trim();
 
   const prompt = `You are the judge in a word-guessing game. Secret word: "${secretWord}". Player guessed: "${cleanGuess}".
@@ -234,8 +253,7 @@ Return ONLY valid JSON (no markdown):
   const newGuess: Guess = { word: cleanGuess, score, temperature, hint };
   const updatedGuesses: Guess[] = [...previousGuesses, newGuess];
 
-  // Upsert the play record
-  const today = todayUTC();
+  // Update the play record
   await db
     .update(dailyPlays)
     .set({

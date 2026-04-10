@@ -116,7 +116,7 @@ function GuessRow({ guess, index }: { guess: Guess; index: number }) {
 }
 
 function MidnightCountdown() {
-  const [timeLeft, setTimeLeft] = useState('');
+  const [timeLeft, setTimeLeft] = useState('...');
 
   useEffect(() => {
     function update() {
@@ -202,12 +202,7 @@ export function GameView() {
     evaluateTransition(async () => {
       setGame((prev) => ({ ...prev, status: 'evaluating' }));
       try {
-        const previousGuessesChronological = [...game.guesses].reverse();
-        const result = await evaluateGuessAction(
-          game.secretWord,
-          word,
-          previousGuessesChronological
-        );
+        const result = await evaluateGuessAction(game.secretWord, word);
         const newGuess: Guess = {
           word,
           score: result.score,
@@ -336,7 +331,7 @@ export function GameView() {
             <MidnightCountdown />
           </p>
         </div>
-        <div className='space-y-2'>
+        <div className='space-y-2' ref={guessListRef}>
           {game.guesses.map((g, i) => (
             <GuessRow
               key={g.word}
