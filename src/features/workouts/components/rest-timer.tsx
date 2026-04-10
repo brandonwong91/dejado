@@ -37,6 +37,28 @@ export function RestTimer() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endTimeRef = useRef<number | null>(null);
 
+  const fireNotification = async () => {
+    if (!('Notification' in window) || Notification.permission !== 'granted')
+      return;
+    // Prefer SW showNotification — works when app is backgrounded / screen locked
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification('Rest over! 💪', {
+          body: 'Time to get back to your next set.',
+          tag: 'rest-timer',
+          renotify: true
+        } as NotificationOptions);
+        return;
+      } catch {
+        // fall through to basic notification
+      }
+    }
+    new Notification('Rest over! 💪', {
+      body: 'Time to get back to your next set.'
+    });
+  };
+
   // Sync timeLeft when preset changes and timer is idle
   useEffect(() => {
     if (!running && !done) {
@@ -88,28 +110,6 @@ export function RestTimer() {
     return () =>
       document.removeEventListener('visibilitychange', handleVisibility);
   }, [running]);
-
-  const fireNotification = async () => {
-    if (!('Notification' in window) || Notification.permission !== 'granted')
-      return;
-    // Prefer SW showNotification — works when app is backgrounded / screen locked
-    if ('serviceWorker' in navigator) {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification('Rest over! 💪', {
-          body: 'Time to get back to your next set.',
-          tag: 'rest-timer',
-          renotify: true
-        } as NotificationOptions);
-        return;
-      } catch {
-        // fall through to basic notification
-      }
-    }
-    new Notification('Rest over! 💪', {
-      body: 'Time to get back to your next set.'
-    });
-  };
 
   const start = () => {
     if (Notification.permission === 'default') {
