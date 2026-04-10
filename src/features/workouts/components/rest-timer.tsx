@@ -65,6 +65,30 @@ export function RestTimer() {
     };
   }, [running]);
 
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (
+        document.visibilityState !== 'visible' ||
+        !running ||
+        !endTimeRef.current
+      )
+        return;
+      const remaining = Math.ceil((endTimeRef.current - Date.now()) / 1000);
+      if (remaining <= 0) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        setTimeLeft(0);
+        setRunning(false);
+        setDone(true);
+        fireNotification();
+      } else {
+        setTimeLeft(remaining);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () =>
+      document.removeEventListener('visibilitychange', handleVisibility);
+  }, [running]);
+
   const fireNotification = async () => {
     if (!('Notification' in window) || Notification.permission !== 'granted')
       return;
@@ -176,7 +200,7 @@ export function RestTimer() {
               strokeDashoffset={`${2 * Math.PI * 13 * (1 - progress)}`}
               strokeLinecap='round'
               className={cn(
-                'transition-all duration-1000',
+                'transition-all duration-500',
                 done ? 'text-primary' : 'text-primary'
               )}
             />
