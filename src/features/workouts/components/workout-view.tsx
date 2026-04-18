@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { sendNotification } from '@/lib/notifications';
+import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { WorkoutCalendar } from '@/features/workouts/components/workout-calendar';
@@ -51,27 +50,6 @@ export function WorkoutView({
   sessions
 }: WorkoutViewProps) {
   const [activeTab, setActiveTab] = useState('routines');
-
-  useEffect(() => {
-    const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const todayName = DAY_NAMES[new Date().getDay()];
-    const todaysWorkouts = workouts.filter(
-      (w) =>
-        w.scheduledDays &&
-        w.scheduledDays
-          .split(',')
-          .map((d) => d.trim())
-          .includes(todayName)
-    );
-    if (todaysWorkouts.length > 0) {
-      sendNotification(
-        "It's Workout Day",
-        `Scheduled today: ${todaysWorkouts.map((w) => w.name).join(', ')}`,
-        'workout-day-reminder',
-        '/workouts'
-      );
-    }
-  }, []);
 
   return (
     <div className='space-y-8 pb-10'>

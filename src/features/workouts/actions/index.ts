@@ -61,7 +61,6 @@ export async function deleteExerciseAction(id: string) {
 export async function createWorkoutAction(data: {
   name: string;
   description?: string;
-  scheduledDays?: string;
   exerciseIds: string[];
 }) {
   const { userId } = await auth();
@@ -72,8 +71,7 @@ export async function createWorkoutAction(data: {
     .values({
       userId,
       name: data.name,
-      description: data.description,
-      scheduledDays: data.scheduledDays
+      description: data.description
     })
     .returning();
 
@@ -95,7 +93,6 @@ export async function updateWorkoutAction(
   data: {
     name: string;
     description?: string;
-    scheduledDays?: string;
     exerciseIds: string[];
   }
 ) {
@@ -107,7 +104,6 @@ export async function updateWorkoutAction(
     .set({
       name: data.name,
       description: data.description,
-      scheduledDays: data.scheduledDays,
       updatedAt: new Date()
     })
     .where(eq(workouts.id, id));
@@ -283,7 +279,6 @@ export async function getWorkoutRecommendationAction(): Promise<WorkoutRecommend
     .select({
       workoutId: workouts.id,
       workoutName: workouts.name,
-      scheduledDays: workouts.scheduledDays,
       exerciseName: exercises.name
     })
     .from(workouts)
@@ -296,13 +291,12 @@ export async function getWorkoutRecommendationAction(): Promise<WorkoutRecommend
   // Group into routines map
   const routineMap = new Map<
     string,
-    { name: string; scheduledDays: string | null; exerciseNames: string[] }
+    { name: string; exerciseNames: string[] }
   >();
   for (const row of rows) {
     if (!routineMap.has(row.workoutId)) {
       routineMap.set(row.workoutId, {
         name: row.workoutName,
-        scheduledDays: row.scheduledDays,
         exerciseNames: []
       });
     }
@@ -311,14 +305,20 @@ export async function getWorkoutRecommendationAction(): Promise<WorkoutRecommend
     }
   }
 
-  // Fetch last 10 completed sessions
-  const recentSessions = await db
+  // Fetch recent completed sessions with their exercise sets (for intensity data)
+  const recentSessionSets = await db
     .select({
-      workoutId: workoutSessions.workoutId,
+      sessionId: workoutSessions.id,
       workoutName: workoutSessions.workoutName,
-      completedAt: workoutSessions.completedAt
+      workoutId: workoutSessions.workoutId,
+      completedAt: workoutSessions.completedAt,
+      exerciseName: exercises.name,
+      weight: exerciseSets.weight,
+      reps: exerciseSets.reps
     })
     .from(workoutSessions)
+    .innerJoin(exerciseSets, eq(exerciseSets.sessionId, workoutSessions.id))
+    .innerJoin(exercises, eq(exercises.id, exerciseSets.exerciseId))
     .where(
       and(
         eq(workoutSessions.userId, userId),
@@ -326,51 +326,94 @@ export async function getWorkoutRecommendationAction(): Promise<WorkoutRecommend
       )
     )
     .orderBy(desc(workoutSessions.completedAt))
-    .limit(10);
+    .limit(150); // enough to cover ~7 recent sessions
 
   const today = new Date();
-  const todayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][
-    today.getDay()
-  ];
+
+  // Group sets by session and compute volume
+  const sessionMap = new Map<
+    string,
+    {
+      workoutName: string;
+      workoutId: string | null;
+      completedAt: Date;
+      totalVolume: number;
+      totalSets: number;
+      exercises: Set<string>;
+    }
+  >();
+
+  for (const row of recentSessionSets) {
+    if (!sessionMap.has(row.sessionId)) {
+      sessionMap.set(row.sessionId, {
+        workoutName: row.workoutName ?? 'Unknown',
+        workoutId: row.workoutId,
+        completedAt: row.completedAt!,
+        totalVolume: 0,
+        totalSets: 0,
+        exercises: new Set()
+      });
+    }
+    const session = sessionMap.get(row.sessionId)!;
+    const w = parseFloat(row.weight ?? '0');
+    const r = parseFloat(row.reps ?? '0');
+    session.totalVolume += isNaN(w) || isNaN(r) ? 0 : w * r;
+    session.totalSets += 1;
+    if (row.exerciseName) session.exercises.add(row.exerciseName);
+  }
+
+  // Sort sessions by date descending and take the 7 most recent
+  const sortedSessions = Array.from(sessionMap.values())
+    .sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())
+    .slice(0, 7);
 
   const routinesSummary = Array.from(routineMap.entries())
     .map(([, r]) => {
-      const days = r.scheduledDays ? ` (scheduled: ${r.scheduledDays})` : '';
       const exList =
         r.exerciseNames.length > 0
           ? r.exerciseNames.join(', ')
           : 'no exercises';
-      return `- ${r.name}${days}: ${exList}`;
+      return `- ${r.name}: ${exList}`;
     })
     .join('\n');
 
   const sessionsSummary =
-    recentSessions.length > 0
-      ? recentSessions
+    sortedSessions.length > 0
+      ? sortedSessions
           .map((s) => {
-            const daysAgo = differenceInDays(today, s.completedAt!);
+            const daysAgo = differenceInDays(today, s.completedAt);
             const label = daysAgo === 0 ? 'today' : `${daysAgo}d ago`;
-            return `- ${s.workoutName ?? 'Unknown'} — ${label}`;
+            const intensity =
+              s.totalVolume > 5000
+                ? 'high intensity'
+                : s.totalVolume > 2000
+                  ? 'moderate intensity'
+                  : 'light intensity';
+            const exerciseList = Array.from(s.exercises).join(', ');
+            return `- ${s.workoutName} — ${label} | ${s.totalSets} sets | ${Math.round(s.totalVolume)}kg total volume (${intensity}) | exercises: ${exerciseList}`;
           })
           .join('\n')
       : 'No sessions recorded yet';
 
-  const prompt = `You are an expert fitness coach specialising in hypertrophy (muscle growth).
-Today is ${todayName}, ${today.toDateString()}.
+  const prompt = `You are an elite strength and hypertrophy coach. Your goal is to maximise the user's muscle growth and strength gains through intelligent programming.
 
-The user's workout routines:
+The user's available workout routines:
 ${routinesSummary}
 
-Recent completed sessions (newest first):
+Recent training sessions with intensity data (newest first):
 ${sessionsSummary}
 
-Based on muscle group recovery (48–72h), frequency balance (2×/week per group), and hypertrophy principles, recommend the single best workout to do today.
+Recommend the single best routine for the user's NEXT workout. Use these principles:
+1. RECOVERY: Muscle groups need 48–72h of recovery between sessions. High-volume or high-intensity sessions require MORE recovery time before those same muscles are trained again.
+2. FREQUENCY: For optimal hypertrophy and strength, each muscle group should be trained roughly 2× per week. Avoid neglecting any muscle groups.
+3. PROGRESSION: If a routine was done recently with high intensity, deprioritise it and favour routines targeting fresh/recovered muscle groups.
+4. BALANCE: Recommend the routine that best balances overall muscle development and prevents imbalances between pushing, pulling, and leg movements.
 
 Return ONLY a raw JSON object with no markdown:
 {
   "workoutName": "<exact name from the routines list above>",
-  "reasoning": "<2–3 sentences explaining the choice based on recovery and progression>",
-  "focusAreas": ["<muscle group 1>", "<muscle group 2>"]
+  "reasoning": "<2–3 sentences explaining why this routine is optimal right now based on recent training intensity and recovery status>",
+  "focusAreas": ["<primary muscle group 1>", "<primary muscle group 2>"]
 }`;
 
   const raw = await callPollinationsText(prompt);

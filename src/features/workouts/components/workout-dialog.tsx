@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -46,19 +45,9 @@ import { CSS } from '@dnd-kit/utilities';
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   description: z.string().optional(),
-  scheduledDays: z.array(z.string()),
   exerciseIds: z.array(z.string())
 });
 
-const DAYS = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday'
-];
 const DEFAULT_EMPTY_ARRAY: any[] = [];
 
 interface WorkoutDialogProps {
@@ -92,8 +81,6 @@ export function WorkoutDialog({
     defaultValues: {
       name: initialData?.name || '',
       description: initialData?.description || '',
-      scheduledDays:
-        initialData?.scheduledDays?.split(',').filter(Boolean) || [],
       exerciseIds: sortedInitialIds
     }
   });
@@ -104,8 +91,6 @@ export function WorkoutDialog({
       form.reset({
         name: initialData?.name || '',
         description: initialData?.description || '',
-        scheduledDays:
-          initialData?.scheduledDays?.split(',').filter(Boolean) || [],
         exerciseIds: sortedInitialIds
       });
     }
@@ -137,19 +122,11 @@ export function WorkoutDialog({
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       setLoading(true);
-      const sortedDays = [...values.scheduledDays].sort((a, b) => {
-        return DAYS.indexOf(a) - DAYS.indexOf(b);
-      });
-      const data = {
-        ...values,
-        scheduledDays: sortedDays.join(',')
-      };
-
       if (isEditing) {
-        await updateWorkoutAction(initialData.id, data);
+        await updateWorkoutAction(initialData.id, values);
         toast.success('Workout updated');
       } else {
-        await createWorkoutAction(data);
+        await createWorkoutAction(values);
         toast.success('Workout created');
       }
       setOpen(false);
@@ -222,42 +199,6 @@ export function WorkoutDialog({
                 </FormItem>
               )}
             />
-
-            <div className='space-y-3'>
-              <FormLabel className='text-muted-foreground text-[10px] font-bold tracking-widest uppercase'>
-                Scheduled Days
-              </FormLabel>
-              <div className='grid grid-cols-2 gap-2 sm:grid-cols-4'>
-                {DAYS.map((day) => (
-                  <FormField
-                    key={day}
-                    control={form.control}
-                    name='scheduledDays'
-                    render={({ field }) => (
-                      <FormItem className='bg-muted/30 flex flex-row items-center space-y-0 space-x-2 rounded border p-2'>
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value?.includes(day)}
-                            onCheckedChange={(checked) => {
-                              return checked
-                                ? field.onChange([...field.value, day])
-                                : field.onChange(
-                                    field.value?.filter(
-                                      (value) => value !== day
-                                    )
-                                  );
-                            }}
-                          />
-                        </FormControl>
-                        <FormLabel className='cursor-pointer text-xs font-medium'>
-                          {day.substring(0, 3)}
-                        </FormLabel>
-                      </FormItem>
-                    )}
-                  />
-                ))}
-              </div>
-            </div>
 
             <div className='space-y-4'>
               <div className='flex items-center justify-between'>

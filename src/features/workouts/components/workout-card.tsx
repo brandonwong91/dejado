@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   PlayIcon,
-  CalendarIcon,
   ListChecksIcon,
   Edit2Icon,
   Trash2Icon,
@@ -58,20 +57,6 @@ export function WorkoutCard({
 }: WorkoutCardProps) {
   const router = useRouter();
   const [isStarting, setIsStarting] = useState(false);
-  const DAY_ORDER = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday'
-  ];
-  const days = (workout.scheduledDays?.split(',').filter(Boolean) || []).sort(
-    (a, b) => {
-      return DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b);
-    }
-  );
   const completedSessions = sessions.filter((s) => s.completedAt);
   const lastSession =
     completedSessions.length > 0
@@ -124,19 +109,6 @@ export function WorkoutCard({
             <div className='flex items-start justify-between'>
               <div>
                 <div className='mb-1 flex flex-col items-start gap-2'>
-                  {days.length > 0 && (
-                    <div className='flex gap-1'>
-                      {days.map((day) => (
-                        <Badge
-                          key={day}
-                          variant='secondary'
-                          className='h-4 px-1 text-[10px]'
-                        >
-                          {day.substring(0, 3)}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
                   <h3 className='text-xl font-bold'>{workout.name}</h3>
                 </div>
                 {workout.description && (
