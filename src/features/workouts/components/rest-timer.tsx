@@ -78,8 +78,10 @@ async function fireNotification() {
       await registration.showNotification('Rest over! 💪', {
         body: 'Time to get back to your next set.',
         tag: 'rest-timer',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
         renotify: true,
-        data: { url: '/workouts' }
+        data: { navigate: '/workouts' }
       } as NotificationOptions);
       return;
     } catch {}

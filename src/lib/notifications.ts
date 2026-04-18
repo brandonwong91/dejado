@@ -11,8 +11,12 @@ export async function sendNotification(
   const notifOptions = {
     body,
     tag,
+    icon: '/icon-192.png',
     renotify: true,
-    data: { url },
+    // Use 'navigate' instead of 'url' — Chrome intercepts notifications whose
+    // data contains a 'url' key on Share-Target PWAs and replaces the body
+    // with its own "Tap to Copy the URL" template.
+    data: { navigate: url },
     ...options
   } as NotificationOptions;
 

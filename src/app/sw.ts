@@ -60,8 +60,13 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
             await self.registration.showNotification('Rest over! 💪', {
               body: 'Time to get back to your next set.',
               tag: 'rest-timer',
+              icon: '/icon-192.png',
+              badge: '/icon-192.png',
               renotify: true,
-              data: { url: '/workouts' }
+              // 'navigate' instead of 'url' — Chrome replaces the notification
+              // body with "Tap to Copy the URL" on Share-Target PWAs when it
+              // finds a 'url' key in the notification data object.
+              data: { navigate: '/workouts' }
             } as NotificationOptions);
           } catch {
             // Notification permission may have been revoked
@@ -82,7 +87,7 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close();
   const targetUrl: string =
-    (event.notification.data as { url?: string })?.url ?? '/';
+    (event.notification.data as { navigate?: string })?.navigate ?? '/';
 
   event.waitUntil(
     self.clients
