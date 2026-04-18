@@ -21,6 +21,64 @@ const serwist = new Serwist({
 
 serwist.addEventListeners();
 
+// ── Background Rest Timer ────────────────────────────────────────────────────
+// The main thread posts SCHEDULE_TIMER / CANCEL_TIMER messages here so the
+// notification fires from the SW thread even when the screen is locked and
+// the page's JS is throttled or frozen by the browser.
+
+let pendingTimerResolve: (() => void) | null = null;
+let pendingTimerId: ReturnType<typeof setTimeout> | null = null;
+
+function clearPendingTimer() {
+  if (pendingTimerId !== null) {
+    clearTimeout(pendingTimerId);
+    pendingTimerId = null;
+  }
+  if (pendingTimerResolve !== null) {
+    pendingTimerResolve();
+    pendingTimerResolve = null;
+  }
+}
+
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  const data = event.data as { type: string; endTime?: number };
+
+  if (data.type === 'SCHEDULE_TIMER' && data.endTime) {
+    clearPendingTimer();
+
+    const delay = Math.max(0, data.endTime - Date.now());
+
+    // event.waitUntil keeps the SW alive until the promise resolves,
+    // preventing the browser from terminating it before the timer fires.
+    event.waitUntil(
+      new Promise<void>((resolve) => {
+        pendingTimerResolve = resolve;
+        pendingTimerId = setTimeout(async () => {
+          pendingTimerId = null;
+          pendingTimerResolve = null;
+          try {
+            await self.registration.showNotification('Rest over! 💪', {
+              body: 'Time to get back to your next set.',
+              tag: 'rest-timer',
+              renotify: true,
+              data: { url: '/workouts' }
+            } as NotificationOptions);
+          } catch {
+            // Notification permission may have been revoked
+          }
+          resolve();
+        }, delay);
+      })
+    );
+  }
+
+  if (data.type === 'CANCEL_TIMER') {
+    clearPendingTimer();
+  }
+});
+
+// ── Notification click ───────────────────────────────────────────────────────
+
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close();
   const targetUrl: string =

@@ -22,6 +22,73 @@ const PRESETS = [
   { label: '5m', seconds: 300 }
 ];
 
+// localStorage key for persisting a running timer across app kills / reloads
+const TIMER_KEY = 'rest-timer-end';
+
+function storeTimerEnd(endTime: number) {
+  try {
+    localStorage.setItem(TIMER_KEY, String(endTime));
+  } catch {}
+}
+
+function clearTimerEnd() {
+  try {
+    localStorage.removeItem(TIMER_KEY);
+  } catch {}
+}
+
+function readTimerEnd(): number | null {
+  try {
+    const v = localStorage.getItem(TIMER_KEY);
+    return v ? Number(v) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Service-Worker communication ─────────────────────────────────────────────
+// The SW runs in a separate thread and is much less likely to be throttled
+// when the screen is locked or the PWA is backgrounded on mobile.
+
+async function scheduleSwTimer(endTime: number) {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    reg.active?.postMessage({ type: 'SCHEDULE_TIMER', endTime });
+  } catch {}
+}
+
+async function cancelSwTimer() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    reg.active?.postMessage({ type: 'CANCEL_TIMER' });
+  } catch {}
+}
+
+// ── Notification helper ───────────────────────────────────────────────────────
+// Used as a fallback when the app IS visible and we don't need the SW path.
+
+async function fireNotification() {
+  if (!('Notification' in window) || Notification.permission !== 'granted')
+    return;
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification('Rest over! 💪', {
+        body: 'Time to get back to your next set.',
+        tag: 'rest-timer',
+        renotify: true,
+        data: { url: '/workouts' }
+      } as NotificationOptions);
+      return;
+    } catch {}
+  }
+  new Notification('Rest over! 💪', {
+    body: 'Time to get back to your next set.'
+  });
+}
+
 function fmt(s: number) {
   const m = Math.floor(s / 60);
   const sec = s % 60;
@@ -37,35 +104,39 @@ export function RestTimer() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endTimeRef = useRef<number | null>(null);
 
-  const fireNotification = async () => {
-    if (!('Notification' in window) || Notification.permission !== 'granted')
-      return;
-    // Prefer SW showNotification — works when app is backgrounded / screen locked
-    if ('serviceWorker' in navigator) {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification('Rest over! 💪', {
-          body: 'Time to get back to your next set.',
-          tag: 'rest-timer',
-          renotify: true
-        } as NotificationOptions);
-        return;
-      } catch {
-        // fall through to basic notification
-      }
-    }
-    new Notification('Rest over! 💪', {
-      body: 'Time to get back to your next set.'
-    });
-  };
+  // ── Restore a running timer that survived a page reload / app kill ──────────
+  useEffect(() => {
+    const storedEnd = readTimerEnd();
+    if (storedEnd === null) return;
 
-  // Sync timeLeft when preset changes and timer is idle
+    const remaining = Math.ceil((storedEnd - Date.now()) / 1000);
+    if (remaining > 0) {
+      // Timer is still running — restore state
+      endTimeRef.current = storedEnd;
+      setTimeLeft(remaining);
+      setRunning(true);
+      // Re-schedule the SW timer in case the old registration was lost
+      scheduleSwTimer(storedEnd);
+    } else {
+      // Timer completed while the app was closed — show done state
+      clearTimerEnd();
+      setTimeLeft(0);
+      setDone(true);
+      fireNotification();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Sync timeLeft when preset changes and timer is idle ─────────────────────
   useEffect(() => {
     if (!running && !done) {
       setTimeLeft(presetSeconds);
     }
   }, [presetSeconds, running, done]);
 
+  // ── Main countdown interval (main-thread UI update) ──────────────────────────
+  // This drives the visible countdown. The SW timer is the authoritative source
+  // for the background notification; this interval only updates the display.
   useEffect(() => {
     if (running) {
       intervalRef.current = setInterval(() => {
@@ -73,10 +144,12 @@ export function RestTimer() {
         const remaining = Math.ceil((endTimeRef.current - Date.now()) / 1000);
         if (remaining <= 0) {
           clearInterval(intervalRef.current!);
+          clearTimerEnd();
+          cancelSwTimer(); // SW may have already fired — cancel to be safe
           setTimeLeft(0);
           setRunning(false);
           setDone(true);
-          fireNotification();
+          fireNotification(); // Fires only when the app is foreground at expiry
         } else {
           setTimeLeft(remaining);
         }
@@ -87,6 +160,9 @@ export function RestTimer() {
     };
   }, [running]);
 
+  // ── Page Visibility — sync timer when user returns to the app ───────────────
+  // Handles the case where the main-thread interval was throttled/frozen
+  // while the app was backgrounded (e.g. user switched apps on iOS).
   useEffect(() => {
     const handleVisibility = () => {
       if (
@@ -98,10 +174,13 @@ export function RestTimer() {
       const remaining = Math.ceil((endTimeRef.current - Date.now()) / 1000);
       if (remaining <= 0) {
         if (intervalRef.current) clearInterval(intervalRef.current);
+        clearTimerEnd();
+        cancelSwTimer();
         setTimeLeft(0);
         setRunning(false);
         setDone(true);
-        fireNotification();
+        // Don't fire here — the SW should already have fired the notification
+        // while the app was in the background.
       } else {
         setTimeLeft(remaining);
       }
@@ -111,11 +190,18 @@ export function RestTimer() {
       document.removeEventListener('visibilitychange', handleVisibility);
   }, [running]);
 
+  // ── Controls ─────────────────────────────────────────────────────────────────
+
   const start = () => {
     if (Notification.permission === 'default') {
       Notification.requestPermission();
     }
-    endTimeRef.current = Date.now() + timeLeft * 1000;
+    const endTime = Date.now() + timeLeft * 1000;
+    endTimeRef.current = endTime;
+    // Persist so the timer survives a page reload
+    storeTimerEnd(endTime);
+    // Schedule the notification inside the SW (works when screen is locked)
+    scheduleSwTimer(endTime);
     setDone(false);
     setRunning(true);
     setExpanded(false);
@@ -124,6 +210,8 @@ export function RestTimer() {
   const pause = () => {
     setRunning(false);
     endTimeRef.current = null;
+    clearTimerEnd();
+    cancelSwTimer();
   };
 
   const reset = () => {
@@ -131,6 +219,8 @@ export function RestTimer() {
     setDone(false);
     setTimeLeft(presetSeconds);
     endTimeRef.current = null;
+    clearTimerEnd();
+    cancelSwTimer();
   };
 
   const selectPreset = (s: number) => {
@@ -139,6 +229,8 @@ export function RestTimer() {
     setDone(false);
     setTimeLeft(s);
     endTimeRef.current = null;
+    clearTimerEnd();
+    cancelSwTimer();
   };
 
   const progress = running || done ? 1 - timeLeft / presetSeconds : 0;
