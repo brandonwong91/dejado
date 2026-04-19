@@ -184,13 +184,13 @@ export async function generateDailySummariesAction(): Promise<void> {
     db.selectDistinct({ userId: workoutSessions.userId }).from(workoutSessions)
   ]);
 
-  const allUserIds = [
-    ...new Set([
+  const allUserIds = Array.from(
+    new Set([
       ...paymentUsers.map((u) => u.userId),
       ...purchaseUsers.map((u) => u.userId),
       ...workoutUsers.map((u) => u.userId)
     ])
-  ];
+  );
 
   // Generate summaries in parallel (one per user)
   await Promise.allSettled(
