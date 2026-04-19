@@ -2,6 +2,7 @@ import {
   generateArticleAction,
   getGlobalTrendingTopicsAction
 } from '@/features/articles/actions';
+import { generateDailySummariesAction } from '@/features/notifications/actions/daily-summary';
 import { db } from '@/db';
 import { interests } from '@/db/schema';
 import { sql } from 'drizzle-orm';
@@ -34,6 +35,12 @@ export async function GET(request: Request) {
       generateArticleAction(undefined, true, userId), // From interests (private)
       generateArticleAction(trendTopic, false) // From global trends (public)
     ]);
+
+    // Generate daily summary notifications for all users in the background.
+    // Fire-and-forget — never blocks or fails the article response.
+    generateDailySummariesAction().catch((err) =>
+      console.error('Daily summary generation failed:', err)
+    );
 
     return NextResponse.json({
       success: true,

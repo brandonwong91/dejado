@@ -197,6 +197,22 @@ export const dailyWords = pgTable('daily_words', {
   createdAt: timestamp('created_at').defaultNow().notNull()
 });
 
+export const dailySummaries = pgTable(
+  'daily_summaries',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id').notNull(),
+    date: text('date').notNull(), // 'YYYY-MM-DD' — one record per user per day
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    isRead: text('is_read').default('false').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull()
+  },
+  (table) => [
+    uniqueIndex('daily_summaries_user_date_idx').on(table.userId, table.date)
+  ]
+);
+
 export const dailyPlays = pgTable(
   'daily_plays',
   {
