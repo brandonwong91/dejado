@@ -1,8 +1,14 @@
+// NOTE: Do NOT use registration.showNotification() from page context.
+// On Chrome Android, PWAs with share_target registered in their manifest
+// have all page-context SW notifications intercepted by Chrome, which
+// replaces the notification body with its own "Tap to Copy the URL" template.
+// Use new Notification() from the page, and self.registration.showNotification()
+// only from within Service Worker code.
 export async function sendNotification(
   title: string,
   body: string,
   tag: string,
-  url: string,
+  _url: string,
   options?: Partial<NotificationOptions>
 ): Promise<void> {
   if (!('Notification' in window) || Notification.permission !== 'granted')
@@ -13,22 +19,8 @@ export async function sendNotification(
     tag,
     icon: '/icon-192.png',
     renotify: true,
-    // Use 'navigate' instead of 'url' — Chrome intercepts notifications whose
-    // data contains a 'url' key on Share-Target PWAs and replaces the body
-    // with its own "Tap to Copy the URL" template.
-    data: { navigate: url },
     ...options
   } as NotificationOptions;
-
-  if ('serviceWorker' in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(title, notifOptions);
-      return;
-    } catch {
-      // fall through to basic notification
-    }
-  }
 
   new Notification(title, notifOptions);
 }

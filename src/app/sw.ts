@@ -22,63 +22,118 @@ const serwist = new Serwist({
 serwist.addEventListeners();
 
 // ── Background Rest Timer ────────────────────────────────────────────────────
-// The main thread posts SCHEDULE_TIMER / CANCEL_TIMER messages here so the
-// notification fires from the SW thread even when the screen is locked and
-// the page's JS is throttled or frozen by the browser.
+//
+// The page sends SCHEDULE_TIMER / CANCEL_TIMER messages. All notification work
+// happens entirely inside the SW thread — never via registration.showNotification()
+// from the page context, which Chrome intercepts on Share-Target PWAs and
+// replaces with its own "Tap to Copy the URL" template.
+//
+// Live countdown: an updating notification is shown immediately so the user
+// can glance at the notification shade to see how much rest time remains.
+// It refreshes every 15 s (silent, same tag → replaces previous entry).
+// The final "Rest over!" fires with renotify:true (vibrates/sounds again).
 
-let pendingTimerResolve: (() => void) | null = null;
-let pendingTimerId: ReturnType<typeof setTimeout> | null = null;
+function fmtTime(s: number): string {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return m > 0 ? `${m}:${String(sec).padStart(2, '0')}` : `${sec}s`;
+}
 
-function clearPendingTimer() {
-  if (pendingTimerId !== null) {
-    clearTimeout(pendingTimerId);
-    pendingTimerId = null;
+let timerResolve: (() => void) | null = null;
+let finalTimerId: ReturnType<typeof setTimeout> | null = null;
+let countdownIntervalId: ReturnType<typeof setInterval> | null = null;
+
+async function clearAllTimers() {
+  if (finalTimerId !== null) {
+    clearTimeout(finalTimerId);
+    finalTimerId = null;
   }
-  if (pendingTimerResolve !== null) {
-    pendingTimerResolve();
-    pendingTimerResolve = null;
+  if (countdownIntervalId !== null) {
+    clearInterval(countdownIntervalId);
+    countdownIntervalId = null;
   }
+  if (timerResolve !== null) {
+    timerResolve();
+    timerResolve = null;
+  }
+  // Dismiss any live-countdown notification left in the tray
+  try {
+    const notifs = await self.registration.getNotifications({
+      tag: 'rest-timer'
+    });
+    notifs.forEach((n) => n.close());
+  } catch {}
+}
+
+async function showCountdown(endTime: number) {
+  const remaining = Math.ceil((endTime - Date.now()) / 1000);
+  if (remaining <= 0) return;
+  try {
+    await self.registration.showNotification('⏱ Rest Timer', {
+      body: `${fmtTime(remaining)} remaining — keep resting`,
+      tag: 'rest-timer',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      silent: true, // no buzz on countdown ticks
+      renotify: false,
+      data: { navigate: '/workouts' }
+    } as NotificationOptions);
+  } catch {}
 }
 
 self.addEventListener('message', (event: ExtendableMessageEvent) => {
-  const data = event.data as { type: string; endTime?: number };
+  const msg = event.data as { type: string; endTime?: number };
 
-  if (data.type === 'SCHEDULE_TIMER' && data.endTime) {
-    clearPendingTimer();
+  if (msg.type === 'SCHEDULE_TIMER' && msg.endTime) {
+    const endTime = msg.endTime;
 
-    const delay = Math.max(0, data.endTime - Date.now());
-
-    // event.waitUntil keeps the SW alive until the promise resolves,
-    // preventing the browser from terminating it before the timer fires.
+    // Wrap everything in event.waitUntil so the browser keeps the SW alive
+    // for the full duration of the rest period.
     event.waitUntil(
-      new Promise<void>((resolve) => {
-        pendingTimerResolve = resolve;
-        pendingTimerId = setTimeout(async () => {
-          pendingTimerId = null;
-          pendingTimerResolve = null;
-          try {
-            await self.registration.showNotification('Rest over! 💪', {
-              body: 'Time to get back to your next set.',
-              tag: 'rest-timer',
-              icon: '/icon-192.png',
-              badge: '/icon-192.png',
-              renotify: true,
-              // 'navigate' instead of 'url' — Chrome replaces the notification
-              // body with "Tap to Copy the URL" on Share-Target PWAs when it
-              // finds a 'url' key in the notification data object.
-              data: { navigate: '/workouts' }
-            } as NotificationOptions);
-          } catch {
-            // Notification permission may have been revoked
-          }
-          resolve();
-        }, delay);
-      })
+      (async () => {
+        await clearAllTimers();
+
+        await new Promise<void>((resolve) => {
+          timerResolve = resolve;
+
+          // 1. Show the initial countdown notification immediately
+          showCountdown(endTime);
+
+          // 2. Refresh it every 15 s so the tray stays accurate
+          countdownIntervalId = setInterval(() => {
+            showCountdown(endTime);
+          }, 15_000);
+
+          // 3. At T=0 → fire the "Rest over!" notification
+          const delay = Math.max(0, endTime - Date.now());
+          finalTimerId = setTimeout(async () => {
+            if (countdownIntervalId !== null) {
+              clearInterval(countdownIntervalId);
+              countdownIntervalId = null;
+            }
+            finalTimerId = null;
+            timerResolve = null;
+
+            try {
+              await self.registration.showNotification('Rest over! 💪', {
+                body: 'Time to get back to your next set.',
+                tag: 'rest-timer',
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
+                renotify: true, // vibrate/sound again
+                data: { navigate: '/workouts' }
+              } as NotificationOptions);
+            } catch {}
+
+            resolve();
+          }, delay);
+        });
+      })()
     );
   }
 
-  if (data.type === 'CANCEL_TIMER') {
-    clearPendingTimer();
+  if (msg.type === 'CANCEL_TIMER') {
+    event.waitUntil(clearAllTimers());
   }
 });
 
@@ -87,7 +142,7 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close();
   const targetUrl: string =
-    (event.notification.data as { navigate?: string })?.navigate ?? '/';
+    (event.notification.data as { navigate?: string })?.navigate ?? '/workouts';
 
   event.waitUntil(
     self.clients
