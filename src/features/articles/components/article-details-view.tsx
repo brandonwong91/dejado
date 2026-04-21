@@ -255,7 +255,7 @@ export function ArticleDetailsView({
     });
   };
   return (
-    <div className='mx-auto max-w-4xl space-y-8 pb-20'>
+    <div className='mx-auto w-full max-w-4xl space-y-8 overflow-x-hidden pb-20'>
       <div className='flex flex-wrap items-center justify-between gap-y-2'>
         <Button
           variant='ghost'
@@ -306,7 +306,7 @@ export function ArticleDetailsView({
         <div className='flex flex-wrap items-center justify-center gap-3'>
           <Badge
             variant='secondary'
-            className='bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1 text-[10px] tracking-widest uppercase transition-colors'
+            className='bg-primary/10 text-primary hover:bg-primary/20 max-w-[calc(100vw-3rem)] whitespace-normal break-words px-3 py-1 text-center text-[10px] tracking-wider uppercase transition-colors'
           >
             {article.topic || 'Trending Insight'}
           </Badge>
@@ -332,7 +332,7 @@ export function ArticleDetailsView({
         </div>
       </header>
 
-      <article className='prose prose-neutral dark:prose-invert prose-lg max-w-none md:px-8'>
+      <article className='prose prose-neutral dark:prose-invert prose-lg max-w-none overflow-x-hidden md:px-8'>
         {article.summary && (
           <div className='bg-muted/30 border-primary text-foreground mb-12 rounded-r-2xl border-l-4 p-4 text-base leading-relaxed italic sm:p-6 sm:text-xl'>
             &ldquo;{article.summary}&rdquo;
