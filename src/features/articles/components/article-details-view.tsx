@@ -254,10 +254,9 @@ export function ArticleDetailsView({
       );
     });
   };
-  console.log('Rendering ArticleDetailsView with article:', article);
   return (
     <div className='mx-auto max-w-4xl space-y-8 pb-20'>
-      <div className='flex items-center justify-between'>
+      <div className='flex flex-wrap items-center justify-between gap-y-2'>
         <Button
           variant='ghost'
           size='sm'
@@ -265,7 +264,8 @@ export function ArticleDetailsView({
           className='text-muted-foreground hover:text-primary -ml-2 gap-2'
         >
           <Link href='/articles'>
-            <ArrowLeftIcon className='size-4' /> Back to Daily Feed
+            <ArrowLeftIcon className='size-4' />
+            <span className='hidden sm:inline'>Back to Daily Feed</span>
           </Link>
         </Button>
         <div className='flex gap-2'>
@@ -275,7 +275,8 @@ export function ArticleDetailsView({
             className='shrink-0 gap-2'
             onClick={handleShare}
           >
-            <Share2Icon className='size-4' /> Share
+            <Share2Icon className='size-4' />
+            <span className='hidden sm:inline'>Share</span>
           </Button>
           {isOwner && (
             <Button
@@ -287,11 +288,13 @@ export function ArticleDetailsView({
             >
               {article.isPublic === 'true' ? (
                 <>
-                  <GlobeIcon className='size-4' /> Public
+                  <GlobeIcon className='size-4' />
+                  <span className='hidden sm:inline'>Public</span>
                 </>
               ) : (
                 <>
-                  <LockIcon className='size-4' /> Private
+                  <LockIcon className='size-4' />
+                  <span className='hidden sm:inline'>Private</span>
                 </>
               )}
             </Button>
@@ -300,7 +303,7 @@ export function ArticleDetailsView({
       </div>
 
       <header className='space-y-4 text-center'>
-        <div className='flex items-center justify-center gap-3'>
+        <div className='flex flex-wrap items-center justify-center gap-3'>
           <Badge
             variant='secondary'
             className='bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1 text-[10px] tracking-widest uppercase transition-colors'
@@ -311,10 +314,10 @@ export function ArticleDetailsView({
             <ClockIcon className='size-3.5' /> 2 min read
           </div>
         </div>
-        <h1 className='text-4xl leading-tight font-extrabold tracking-tight text-balance md:text-5xl lg:text-6xl'>
+        <h1 className='text-2xl leading-tight font-extrabold tracking-tight text-balance sm:text-4xl md:text-5xl lg:text-6xl'>
           {article.title}
         </h1>
-        <div className='text-muted-foreground flex items-center justify-center gap-4 pt-4 text-sm font-medium'>
+        <div className='text-muted-foreground flex flex-wrap items-center justify-center gap-4 pt-4 text-sm font-medium'>
           <div className='flex items-center gap-2'>
             <div className='bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-full font-bold shadow-sm'>
               <SparklesIcon className='size-4' />
@@ -331,7 +334,7 @@ export function ArticleDetailsView({
 
       <article className='prose prose-neutral dark:prose-invert prose-lg max-w-none md:px-8'>
         {article.summary && (
-          <div className='bg-muted/30 border-primary text-foreground mb-12 rounded-r-2xl border-l-4 p-6 text-xl leading-relaxed italic'>
+          <div className='bg-muted/30 border-primary text-foreground mb-12 rounded-r-2xl border-l-4 p-4 text-base leading-relaxed italic sm:p-6 sm:text-xl'>
             &ldquo;{article.summary}&rdquo;
           </div>
         )}
