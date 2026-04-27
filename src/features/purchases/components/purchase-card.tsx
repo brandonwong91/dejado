@@ -1,5 +1,6 @@
 'use client';
 
+import { useOptimistic, useTransition } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,6 +10,7 @@ import {
   CalendarIcon,
   CheckCircle2Icon,
   Edit2Icon,
+  Loader2Icon,
   RepeatIcon,
   Trash2Icon,
   RefreshCwIcon,
@@ -40,13 +42,15 @@ interface PurchaseCardProps {
 export function PurchaseCard({ purchase }: PurchaseCardProps) {
   const isBought = purchase.isBought === 'true';
   const today = new Date();
+  const [isPending, startTransition] = useTransition();
+  const [optimisticIsBought, setOptimisticIsBought] = useOptimistic(isBought);
 
   const daysDiff = purchase.dueDate
     ? differenceInCalendarDays(purchase.dueDate, today)
     : null;
 
   const getStatusColor = () => {
-    if (isBought) return '';
+    if (optimisticIsBought) return '';
     if (daysDiff === null) return '';
     if (daysDiff <= 0) return 'border-red-500 bg-red-50 dark:bg-red-950/20';
     if (daysDiff <= 3)
@@ -61,18 +65,22 @@ export function PurchaseCard({ purchase }: PurchaseCardProps) {
     return `(${daysDiff}d)`;
   };
 
-  async function handleToggle() {
-    try {
-      if (isBought) {
-        await unbuyPurchaseAction(purchase.id);
-        toast.success('Moved back to To Buy list');
-      } else {
-        await buyPurchaseAction(purchase.id);
-        toast.success('Marked as Bought');
+  function handleToggle() {
+    const newValue = !optimisticIsBought;
+    startTransition(async () => {
+      setOptimisticIsBought(newValue);
+      try {
+        if (!newValue) {
+          await unbuyPurchaseAction(purchase.id);
+          toast.success('Moved back to To Buy list');
+        } else {
+          await buyPurchaseAction(purchase.id);
+          toast.success('Marked as Bought');
+        }
+      } catch (error) {
+        toast.error('Failed to update status');
       }
-    } catch (error) {
-      toast.error('Failed to update status');
-    }
+    });
   }
 
   async function handleDelete() {
@@ -90,24 +98,28 @@ export function PurchaseCard({ purchase }: PurchaseCardProps) {
       className={cn(
         'group relative overflow-hidden border-l-4 transition-all hover:shadow-md',
         getStatusColor(),
-        isBought && 'bg-muted/50 border-l-muted opacity-80'
+        optimisticIsBought && 'bg-muted/50 border-l-muted opacity-80'
       )}
     >
       <CardContent className='flex flex-col gap-4 p-4 sm:flex-row sm:items-center'>
         <div className='flex min-w-0 flex-1 items-start gap-4 sm:items-center'>
-          <Checkbox
-            checked={isBought}
-            onCheckedChange={handleToggle}
-            className='mt-1 size-5 sm:mt-0'
-          />
+          {isPending ? (
+            <Loader2Icon className='text-primary mt-1 size-5 shrink-0 animate-spin sm:mt-0' />
+          ) : (
+            <Checkbox
+              checked={optimisticIsBought}
+              onCheckedChange={handleToggle}
+              className='mt-1 size-5 sm:mt-0'
+            />
+          )}
 
           <div className='min-w-0 flex-1 space-y-1'>
             <div className='flex flex-wrap items-center gap-2'>
               <h3
                 className={cn(
                   'truncate text-lg font-semibold',
-                  isBought && 'text-muted-foreground line-through decoration-2',
-                  !isBought &&
+                  optimisticIsBought && 'text-muted-foreground line-through decoration-2',
+                  !optimisticIsBought &&
                     daysDiff !== null &&
                     daysDiff <= 0 &&
                     'text-red-600 dark:text-red-400'
@@ -130,11 +142,11 @@ export function PurchaseCard({ purchase }: PurchaseCardProps) {
                 <div
                   className={cn(
                     'flex items-center gap-1.5',
-                    !isBought &&
+                    !optimisticIsBought &&
                       daysDiff !== null &&
                       daysDiff <= 0 &&
                       'font-semibold text-red-600 dark:text-red-400',
-                    !isBought &&
+                    !optimisticIsBought &&
                       daysDiff !== null &&
                       daysDiff > 0 &&
                       daysDiff <= 3 &&
@@ -150,7 +162,7 @@ export function PurchaseCard({ purchase }: PurchaseCardProps) {
                   </span>
                 </div>
               )}
-              {isBought && purchase.lastBoughtAt && (
+              {optimisticIsBought && purchase.lastBoughtAt && (
                 <div className='text-primary flex items-center gap-1.5 font-medium'>
                   <CheckCircle2Icon className='size-3.5' />
                   <span>
@@ -176,7 +188,7 @@ export function PurchaseCard({ purchase }: PurchaseCardProps) {
           </div>
 
           <div className='flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100'>
-            {isBought && (
+            {optimisticIsBought && (
               <button
                 onClick={async () => {
                   try {

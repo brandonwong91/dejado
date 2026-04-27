@@ -1,5 +1,6 @@
 'use client';
 
+import { useOptimistic, useTransition } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,6 +10,7 @@ import {
   CalendarIcon,
   CheckCircle2Icon,
   Edit2Icon,
+  Loader2Icon,
   RepeatIcon,
   Trash2Icon,
   RefreshCwIcon
@@ -40,9 +42,11 @@ export function PaymentCard({ payment }: PaymentCardProps) {
   const isPaid = payment.isPaid === 'true';
   const today = new Date();
   const daysDiff = differenceInCalendarDays(payment.dueDate, today);
+  const [isPending, startTransition] = useTransition();
+  const [optimisticIsPaid, setOptimisticIsPaid] = useOptimistic(isPaid);
 
   const getStatusColor = () => {
-    if (isPaid) return '';
+    if (optimisticIsPaid) return '';
     if (daysDiff <= 0) return 'border-red-500 bg-red-50 dark:bg-red-950/20';
     if (daysDiff <= 3)
       return 'border-amber-500 bg-amber-50 dark:bg-amber-950/20';
@@ -55,23 +59,27 @@ export function PaymentCard({ payment }: PaymentCardProps) {
     return `(${daysDiff}d)`;
   };
 
-  async function handleToggle() {
-    try {
-      await togglePaymentStatusAction(payment.id, !isPaid);
-      if (!isPaid) {
-        toast.success('Payment marked as paid');
-        await sendNotification(
-          'Payment Logged',
-          `${payment.name} — ${payment.amount} ${payment.currency} marked as paid.`,
-          `payment-paid-${payment.id}`,
-          '/payments'
-        );
-      } else {
-        toast.success('Payment marked as unpaid');
+  function handleToggle() {
+    const newValue = !optimisticIsPaid;
+    startTransition(async () => {
+      setOptimisticIsPaid(newValue);
+      try {
+        await togglePaymentStatusAction(payment.id, newValue);
+        if (newValue) {
+          toast.success('Payment marked as paid');
+          await sendNotification(
+            'Payment Logged',
+            `${payment.name} — ${payment.amount} ${payment.currency} marked as paid.`,
+            `payment-paid-${payment.id}`,
+            '/payments'
+          );
+        } else {
+          toast.success('Payment marked as unpaid');
+        }
+      } catch (error) {
+        toast.error('Failed to update status');
       }
-    } catch (error) {
-      toast.error('Failed to update status');
-    }
+    });
   }
 
   async function handleDelete() {
@@ -89,24 +97,28 @@ export function PaymentCard({ payment }: PaymentCardProps) {
       className={cn(
         'group relative overflow-hidden border-l-4 transition-all hover:shadow-md',
         getStatusColor(),
-        isPaid && 'bg-muted/50 border-l-muted opacity-80'
+        optimisticIsPaid && 'bg-muted/50 border-l-muted opacity-80'
       )}
     >
       <CardContent className='flex flex-col gap-4 p-4 sm:flex-row sm:items-center'>
         <div className='flex min-w-0 flex-1 items-start gap-4 sm:items-center'>
-          <Checkbox
-            checked={isPaid}
-            onCheckedChange={handleToggle}
-            className='mt-1 size-5 sm:mt-0'
-          />
+          {isPending ? (
+            <Loader2Icon className='text-primary mt-1 size-5 shrink-0 animate-spin sm:mt-0' />
+          ) : (
+            <Checkbox
+              checked={optimisticIsPaid}
+              onCheckedChange={handleToggle}
+              className='mt-1 size-5 sm:mt-0'
+            />
+          )}
 
           <div className='min-w-0 flex-1 space-y-1'>
             <div className='flex flex-wrap items-center gap-2'>
               <h3
                 className={cn(
                   'truncate text-lg font-semibold',
-                  isPaid && 'text-muted-foreground line-through decoration-2',
-                  !isPaid && daysDiff <= 0 && 'text-red-600 dark:text-red-400'
+                  optimisticIsPaid && 'text-muted-foreground line-through decoration-2',
+                  !optimisticIsPaid && daysDiff <= 0 && 'text-red-600 dark:text-red-400'
                 )}
               >
                 {payment.name}
@@ -116,10 +128,10 @@ export function PaymentCard({ payment }: PaymentCardProps) {
                   variant='secondary'
                   className={cn(
                     'h-5 text-[10px] font-bold tracking-wider uppercase',
-                    !isPaid &&
+                    !optimisticIsPaid &&
                       daysDiff <= 0 &&
                       'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-                    !isPaid &&
+                    !optimisticIsPaid &&
                       daysDiff > 0 &&
                       daysDiff <= 3 &&
                       'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
@@ -134,10 +146,10 @@ export function PaymentCard({ payment }: PaymentCardProps) {
               <div
                 className={cn(
                   'flex items-center gap-1.5',
-                  !isPaid &&
+                  !optimisticIsPaid &&
                     daysDiff <= 0 &&
                     'font-semibold text-red-600 dark:text-red-400',
-                  !isPaid &&
+                  !optimisticIsPaid &&
                     daysDiff > 0 &&
                     daysDiff <= 3 &&
                     'font-medium text-amber-600 dark:text-amber-400'
@@ -151,7 +163,7 @@ export function PaymentCard({ payment }: PaymentCardProps) {
                   </span>
                 </span>
               </div>
-              {isPaid && payment.paidAt && (
+              {optimisticIsPaid && payment.paidAt && (
                 <div className='text-primary flex items-center gap-1.5 font-medium'>
                   <CheckCircle2Icon className='size-3.5' />
                   <span>Paid on: {format(payment.paidAt, 'MMM d, yyyy')}</span>
@@ -170,8 +182,8 @@ export function PaymentCard({ payment }: PaymentCardProps) {
             <div
               className={cn(
                 'font-mono text-xl font-bold md:text-2xl',
-                isPaid && 'text-muted-foreground line-through',
-                !isPaid && daysDiff <= 0 && 'text-red-600 dark:text-red-400'
+                optimisticIsPaid && 'text-muted-foreground line-through',
+                !optimisticIsPaid && daysDiff <= 0 && 'text-red-600 dark:text-red-400'
               )}
             >
               {payment.amount}{' '}
@@ -182,7 +194,7 @@ export function PaymentCard({ payment }: PaymentCardProps) {
           </div>
 
           <div className='flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100'>
-            {isPaid && (
+            {optimisticIsPaid && (
               <button
                 onClick={async () => {
                   try {
