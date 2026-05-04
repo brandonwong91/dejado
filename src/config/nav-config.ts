@@ -90,6 +90,12 @@ export const navItems: NavItem[] = [
         url: '/ai/games',
         icon: 'puzzle',
         shortcut: ['a', 'g']
+      },
+      {
+        title: 'Fortune',
+        url: '/ai/fortune',
+        icon: 'fortune',
+        shortcut: ['a', 'f']
       }
     ]
   },
