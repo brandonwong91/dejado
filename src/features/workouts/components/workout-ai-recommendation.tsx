@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { SparklesIcon, RefreshCwIcon, BrainIcon } from 'lucide-react';
+import {
+  SparklesIcon,
+  RefreshCwIcon,
+  BrainIcon,
+  AlertCircleIcon
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,9 +29,13 @@ export function WorkoutAIRecommendation() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!loaded && !isPending) return null;
+
+  const hasError = rec?.error && !rec.suggestedWorkoutName;
+  const hasRecommendation = rec && rec.suggestedWorkoutName && !rec.error;
 
   return (
     <div className='space-y-2'>
@@ -59,7 +68,14 @@ export function WorkoutAIRecommendation() {
               <div className='bg-muted h-5 w-20 animate-pulse rounded-full' />
             </div>
           </div>
-        ) : rec ? (
+        ) : hasError ? (
+          <div className='flex items-start gap-2'>
+            <AlertCircleIcon className='text-destructive mt-0.5 size-4 shrink-0' />
+            <p className='text-muted-foreground text-xs leading-relaxed'>
+              Could not reach AI service. Check your connection and try again.
+            </p>
+          </div>
+        ) : hasRecommendation ? (
           <div className='space-y-3'>
             <div className='flex items-start gap-2'>
               <SparklesIcon className='text-primary mt-0.5 size-4 shrink-0' />
