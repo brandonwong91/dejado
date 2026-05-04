@@ -242,24 +242,41 @@ export async function completeWorkoutSessionAction(
 
 // ── AI Workout Recommendation ────────────────────────────────────────────────
 
-async function callPollinationsText(prompt: string): Promise<string> {
+async function callPollinationsText(
+  prompt: string
+): Promise<{ content: string; error?: string }> {
   try {
-    const res = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: prompt }],
-        model: 'openai',
-        jsonMode: true,
-        temperature: 0.7
-      }),
-      signal: AbortSignal.timeout(30_000)
-    });
-    if (!res.ok) return '';
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    const apiKey = process.env.POLLINATIONS_API_KEY;
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+    const res = await fetch(
+      'https://text.pollinations.ai/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }],
+          model: 'openai',
+          jsonMode: true,
+          temperature: 0.7
+        }),
+        signal: AbortSignal.timeout(30_000)
+      }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      return { content: '', error: body || `HTTP ${res.status}` };
+    }
     const data = await res.json();
-    return data.choices?.[0]?.message?.content ?? '';
-  } catch {
-    return '';
+    return { content: data.choices?.[0]?.message?.content ?? '' };
+  } catch (e) {
+    return {
+      content: '',
+      error: e instanceof Error ? e.message : 'Unknown error'
+    };
   }
 }
 
@@ -268,6 +285,7 @@ export interface WorkoutRecommendation {
   suggestedWorkoutName: string;
   reasoning: string;
   focusAreas: string[];
+  error?: string;
 }
 
 export async function getWorkoutRecommendationAction(): Promise<WorkoutRecommendation | null> {
@@ -395,28 +413,46 @@ export async function getWorkoutRecommendationAction(): Promise<WorkoutRecommend
           .join('\n')
       : 'No sessions recorded yet';
 
-  const prompt = `You are an elite strength and hypertrophy coach. Your goal is to maximise the user's muscle growth and strength gains through intelligent programming.
+  const lastSession = sortedSessions[0];
+  const lastWorkoutContext = lastSession
+    ? `LAST WORKOUT: "${lastSession.workoutName}" — ${differenceInDays(today, lastSession.completedAt) === 0 ? 'today' : `${differenceInDays(today, lastSession.completedAt)}d ago`} | exercises: ${Array.from(lastSession.exercises).join(', ')} | ${lastSession.totalSets} sets | ${Math.round(lastSession.totalVolume)}kg total volume`
+    : 'No previous workout recorded.';
 
-The user's available workout routines:
-${routinesSummary}
+  const prompt = `You are an elite strength and hypertrophy coach. Recommend the user's NEXT workout based primarily on their LAST workout.
 
-Recent training sessions with intensity data (newest first):
+${lastWorkoutContext}
+
+All recent sessions (newest first):
 ${sessionsSummary}
 
-Recommend the single best routine for the user's NEXT workout. Use these principles:
-1. RECOVERY: Muscle groups need 48–72h of recovery between sessions. High-volume or high-intensity sessions require MORE recovery time before those same muscles are trained again.
-2. FREQUENCY: For optimal hypertrophy and strength, each muscle group should be trained roughly 2× per week. Avoid neglecting any muscle groups.
-3. PROGRESSION: If a routine was done recently with high intensity, deprioritise it and favour routines targeting fresh/recovered muscle groups.
-4. BALANCE: Recommend the routine that best balances overall muscle development and prevents imbalances between pushing, pulling, and leg movements.
+Available workout routines:
+${routinesSummary}
+
+Your recommendation must:
+1. DIRECTLY follow from the last workout — avoid repeating the same muscle groups if they need recovery (48–72h for heavy sessions, 24h for light).
+2. COMPLEMENT the last session — if they trained push muscles last, recommend pull or legs next, and vice versa.
+3. PRIORITISE routines that target the most recovered or least recently trained muscle groups.
+4. If no sessions exist, recommend a balanced starting routine.
 
 Return ONLY a raw JSON object with no markdown:
 {
   "workoutName": "<exact name from the routines list above>",
-  "reasoning": "<2–3 sentences explaining why this routine is optimal right now based on recent training intensity and recovery status>",
+  "reasoning": "<2–3 sentences: what the last workout was, why those muscles need rest, and why this next routine is the best choice right now>",
   "focusAreas": ["<primary muscle group 1>", "<primary muscle group 2>"]
 }`;
 
-  const raw = await callPollinationsText(prompt);
+  const { content: raw, error: apiError } = await callPollinationsText(prompt);
+
+  if (apiError && !raw) {
+    return {
+      suggestedWorkoutId: null,
+      suggestedWorkoutName: '',
+      reasoning: '',
+      focusAreas: [],
+      error: apiError
+    };
+  }
+
   try {
     const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
     const name: string = parsed.workoutName ?? '';
