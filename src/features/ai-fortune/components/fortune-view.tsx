@@ -133,8 +133,7 @@ function TarotCard({
   const isClickable = drawn.status === 'hidden';
 
   return (
-    // On mobile: fills available width up to 260px. On sm+: fixed 192px.
-    <div className='flex w-full max-w-[260px] flex-col items-center gap-3 sm:w-48 sm:max-w-none'>
+    <div className='flex w-full flex-col items-center gap-3'>
       {/* Position label */}
       <div className='text-center'>
         <p className='text-xs font-bold tracking-widest text-amber-600 dark:text-amber-400 uppercase'>
@@ -146,7 +145,7 @@ function TarotCard({
       {/* Card flip container — fills the unit width */}
       <div
         className='relative w-full cursor-pointer'
-        style={{ height: '300px', perspective: '1000px' }}
+        style={{ height: '360px', perspective: '1000px' }}
         onClick={() => isClickable && onReveal(index)}
         role={isClickable ? 'button' : undefined}
         aria-label={isClickable ? `Reveal ${drawn.position} card` : undefined}
@@ -446,7 +445,7 @@ export function FortuneView() {
 
   // ── Drawing / Reading / Generating / Complete ───────────────────────────────
   return (
-    <div className='relative mx-auto max-w-3xl space-y-6 pb-16'>
+    <div className='relative mx-auto max-w-4xl space-y-6 pb-16'>
       <StarsBackground />
       <div className='pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 size-96 rounded-full bg-purple-600/8 blur-3xl' />
 
@@ -462,8 +461,8 @@ export function FortuneView() {
         </p>
       </div>
 
-      {/* Cards row: stacked on mobile (each card fills width), side-by-side on sm+ */}
-      <div className='relative flex flex-col items-center gap-6 px-4 pt-2 sm:flex-row sm:items-start sm:justify-center sm:gap-5 lg:gap-8'>
+      {/* Cards row: single column on mobile, 3-column grid on sm+ filling available width */}
+      <div className='relative grid grid-cols-1 gap-6 px-4 pt-2 sm:grid-cols-3'>
         {reading.cards.map((drawn, i) => (
           <TarotCard
             key={drawn.position}
