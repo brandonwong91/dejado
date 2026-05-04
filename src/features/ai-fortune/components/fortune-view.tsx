@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { Loader2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { revealCardAction, generateFortuneAction } from '../actions';
-import { drawThreeCards, type DrawnCard, type FortuneReading } from '../types';
+import { TAROT_DECK, drawThreeCards, type DrawnCard, type FortuneReading } from '../types';
+
+const STORAGE_KEY = 'tarot_daily_reading';
 
 const POSITION_LABELS = {
   past: 'Past',
@@ -17,6 +19,78 @@ const POSITION_DESC = {
   present: 'Where you stand',
   future: 'What awaits',
 };
+
+// ── localStorage persistence ─────────────────────────────────────────────────
+
+interface StoredCard {
+  cardName: string;
+  position: 'past' | 'present' | 'future';
+  isReversed: boolean;
+  status: 'hidden' | 'revealed';
+  imageBase64: string | null;
+  meaning: string | null;
+}
+
+interface StoredReading {
+  date: string;
+  cards: [StoredCard, StoredCard, StoredCard];
+  fortune: string | null;
+  fortuneImageBase64: string | null;
+  status: 'drawing' | 'reading' | 'complete';
+}
+
+function todayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function loadTodayReading(): FortuneReading | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as StoredReading;
+    if (stored.date !== todayStr()) return null;
+    return {
+      cards: stored.cards.map((c) => ({
+        card: TAROT_DECK.find((d) => d.name === c.cardName) ?? TAROT_DECK[0],
+        position: c.position,
+        isReversed: c.isReversed,
+        status: c.status,
+        imageBase64: c.imageBase64,
+        meaning: c.meaning,
+      })) as [DrawnCard, DrawnCard, DrawnCard],
+      fortune: stored.fortune,
+      fortuneImageBase64: stored.fortuneImageBase64,
+      status: stored.status,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistReading(reading: FortuneReading) {
+  if (reading.status === 'idle') return;
+  const stored: StoredReading = {
+    date: todayStr(),
+    cards: reading.cards.map((c) => ({
+      cardName: c.card.name,
+      position: c.position,
+      isReversed: c.isReversed,
+      status: c.status === 'loading' ? 'hidden' : (c.status as 'hidden' | 'revealed'),
+      imageBase64: c.imageBase64,
+      meaning: c.meaning,
+    })) as [StoredCard, StoredCard, StoredCard],
+    fortune: reading.fortune,
+    fortuneImageBase64: reading.fortuneImageBase64,
+    status: reading.status === 'generating'
+      ? 'reading'
+      : (reading.status as 'drawing' | 'reading' | 'complete'),
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+  } catch {
+    // ignore QuotaExceededError
+  }
+}
 
 // ── Card Back Design ─────────────────────────────────────────────────────────
 
@@ -59,7 +133,8 @@ function TarotCard({
   const isClickable = drawn.status === 'hidden';
 
   return (
-    <div className='flex flex-col items-center gap-3'>
+    // On mobile: fills available width up to 260px. On sm+: fixed 192px.
+    <div className='flex w-full max-w-[260px] flex-col items-center gap-3 sm:w-48 sm:max-w-none'>
       {/* Position label */}
       <div className='text-center'>
         <p className='text-xs font-bold tracking-widest text-amber-600 dark:text-amber-400 uppercase'>
@@ -68,10 +143,10 @@ function TarotCard({
         <p className='text-muted-foreground text-xs'>{POSITION_DESC[drawn.position]}</p>
       </div>
 
-      {/* Card flip container */}
+      {/* Card flip container — fills the unit width */}
       <div
-        className='relative w-36 cursor-pointer'
-        style={{ height: '240px', perspective: '1000px' }}
+        className='relative w-full cursor-pointer'
+        style={{ height: '300px', perspective: '1000px' }}
         onClick={() => isClickable && onReveal(index)}
         role={isClickable ? 'button' : undefined}
         aria-label={isClickable ? `Reveal ${drawn.position} card` : undefined}
@@ -118,7 +193,6 @@ function TarotCard({
                   <span className='text-amber-300 text-sm'>{drawn.card.name}</span>
                 </div>
               )}
-              {/* Card name overlay */}
               <div className='absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2'>
                 <p className='text-center text-xs font-semibold text-amber-300'>
                   {drawn.card.name}
@@ -132,10 +206,10 @@ function TarotCard({
         </div>
       </div>
 
-      {/* Card meaning */}
-      <div className='w-36 min-h-[4rem]'>
+      {/* Card meaning — same width as card */}
+      <div className='w-full min-h-[4rem]'>
         {drawn.status === 'revealed' && drawn.meaning && (
-          <div className='rounded-xl border border-amber-500/30 bg-amber-50/80 dark:bg-amber-500/5 p-2.5'>
+          <div className='rounded-xl border border-amber-500/30 bg-amber-50/80 dark:bg-amber-500/5 p-3'>
             <p className='text-xs leading-relaxed text-amber-900 dark:text-amber-100 italic'>
               {drawn.meaning}
             </p>
@@ -241,16 +315,26 @@ export function FortuneView() {
   });
   const [isPending, startTransition] = useTransition();
 
+  // Restore today's reading on mount
+  useEffect(() => {
+    const saved = loadTodayReading();
+    if (saved) setReading(saved);
+  }, []);
+
+  // Persist reading whenever it changes (skip idle and in-flight transition states)
+  useEffect(() => {
+    if (reading.status !== 'idle') persistReading(reading);
+  }, [reading]);
+
   const allRevealed = reading.cards.every((c) => c.status === 'revealed');
 
   const handleBegin = () => {
-    setReading((prev) => ({
-      ...prev,
+    setReading({
       cards: drawThreeCards(),
       fortune: null,
       fortuneImageBase64: null,
       status: 'drawing',
-    }));
+    });
   };
 
   const handleRevealCard = (index: number) => {
@@ -378,8 +462,8 @@ export function FortuneView() {
         </p>
       </div>
 
-      {/* Cards row */}
-      <div className='relative flex flex-col items-center gap-8 sm:flex-row sm:justify-center sm:items-start sm:gap-4 lg:gap-10 px-4 pt-2'>
+      {/* Cards row: stacked on mobile (each card fills width), side-by-side on sm+ */}
+      <div className='relative flex flex-col items-center gap-6 px-4 pt-2 sm:flex-row sm:items-start sm:justify-center sm:gap-5 lg:gap-8'>
         {reading.cards.map((drawn, i) => (
           <TarotCard
             key={drawn.position}
