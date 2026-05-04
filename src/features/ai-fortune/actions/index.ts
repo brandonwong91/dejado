@@ -97,14 +97,14 @@ export async function revealCardAction(
 
   const [imageBase64, raw] = await Promise.all([
     fetchImageAsBase64(
-      `tarot card "${cardName}", Art Nouveau illustration, Alphonse Mucha inspired, flowing organic lines, ornate decorative floral borders, warm golden tones, soft jewel colours, elegant graceful figures, luminous ethereal glow, beautiful and serene, centred portrait composition`,
+      `tarot card "${cardName}", flat vector illustration, clean geometric flat colour blocking, muted warm palette of cream and dusty rose and warm amber and sage green, thin precise black outlines, central symbolic figure rendered in flat shapes, ornate stained glass border frame with geometric faceted jewel patterns in warm jewel tones, symmetrical balanced composition, modern approachable tarot art, clear readable imagery, whimsical and friendly`,
       {
         model: 'flux',
         width: 384,
         height: 640,
         enhance: true,
         negativePrompt:
-          'photo, realistic, dark gothic, horror, scary, creepy, demonic, skull, death imagery, ugly, blurry, text, watermark, nsfw, modern, photograph'
+          'photo, realistic, dark, gothic, horror, scary, creepy, demonic, skull, gloomy, shadowy, ugly, blurry, noisy, text, watermark, nsfw, photograph, oil painting, medieval dark'
       }
     ),
     callPollinations(
