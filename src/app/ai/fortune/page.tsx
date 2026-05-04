@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import PageContainer from '@/components/layout/page-container';
 import { FortuneView } from '@/features/ai-fortune/components/fortune-view';
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function FortunePage() {
-  return <FortuneView />;
+  return (
+    <PageContainer scrollable>
+      <FortuneView />
+    </PageContainer>
+  );
 }
