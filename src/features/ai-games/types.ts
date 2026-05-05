@@ -1,35 +1,35 @@
-export const MAX_GUESSES = 10;
-
-export type Temperature =
-  | 'Frozen'
-  | 'Cold'
-  | 'Cool'
-  | 'Lukewarm'
-  | 'Warm'
-  | 'Hot'
-  | 'Scorching'
-  | 'On fire!';
-
-export interface Guess {
-  word: string;
-  score: number;
-  temperature: Temperature;
-  hint: string;
+export interface City {
+  name: string;
+  country: string;
+  teaser: string;
 }
 
-export type GameStatus =
+export interface Question {
+  act: 'city' | 'food';
+  type: string;
+  question: string;
+  choices: string[];
+  answer: string;
+  explanation: string;
+}
+
+export interface GameSession {
+  city: string;
+  country: string;
+  dish: string;
+  questions: Question[];
+  transitionLine: string;
+  funFacts: string[];
+  localsTip: string;
+  imagePromptBase: string;
+}
+
+export type GameStage =
   | 'idle'
-  | 'loading'
-  | 'playing'
-  | 'evaluating'
-  | 'won'
-  | 'lost';
-
-export interface GameState {
-  status: GameStatus;
-  secretWord: string;
-  category: string;
-  openingRiddle: string;
-  guesses: Guess[];
-  maxGuesses: number;
-}
+  | 'loading-cities'
+  | 'city-select'
+  | 'loading-session'
+  | 'question'
+  | 'transition'
+  | 'reveal'
+  | 'culture-card';
