@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import PageContainer from '@/components/layout/page-container';
 import { GameView } from '@/features/ai-games/components/game-view';
 
 export const metadata: Metadata = {
@@ -8,5 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default function AIGamesPage() {
-  return <GameView />;
+  return (
+    <PageContainer scrollable>
+      <GameView />
+    </PageContainer>
+  );
 }
