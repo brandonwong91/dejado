@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2Icon, GlobeIcon, UtensilsIcon } from 'lucide-react';
-import type { City, GameSession, GameStage, Question } from '../types';
+import { Loader2Icon, GlobeIcon, UtensilsIcon, ChevronLeftIcon } from 'lucide-react';
+import type { City, GameSession, GameStage, Question, SavedResult } from '../types';
 import {
   getPlayedCities,
   getCachedCities,
   cacheCities,
-  addPlayedCity
+  addPlayedCity,
+  getSavedResults,
+  saveResult
 } from '../utils/cityHistory';
 
 function todayKey() {
@@ -26,37 +28,93 @@ function buildImageUrl(base: string, score: number): string {
 
 // ── Idle ─────────────────────────────────────────────────────────────────────
 
+function PastResultCard({
+  result,
+  onView
+}: {
+  result: SavedResult;
+  onView: () => void;
+}) {
+  const isPerfect = result.score === result.session.questions.length;
+  return (
+    <button
+      onClick={onView}
+      className='group flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition-all hover:border-primary hover:shadow-md'
+    >
+      <div className='relative h-16 w-16 shrink-0 overflow-hidden rounded-xl'>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={result.imageUrl}
+          alt={result.session.dish}
+          className='h-full w-full object-cover'
+        />
+      </div>
+      <div className='min-w-0 flex-1 space-y-0.5'>
+        <p className='truncate font-semibold'>{result.session.dish}</p>
+        <p className='text-muted-foreground text-xs'>
+          {result.session.city} · {result.session.country}
+        </p>
+        <p className='text-xs font-medium'>
+          {isPerfect ? '🏆' : result.score >= 3 ? '🌟' : '🌍'}{' '}
+          {result.score}/{result.session.questions.length} correct ·{' '}
+          {result.date}
+        </p>
+      </div>
+      <ChevronLeftIcon className='text-muted-foreground size-4 rotate-180 shrink-0 transition-transform group-hover:translate-x-0.5' />
+    </button>
+  );
+}
+
 function IdleScreen({
   onStart,
-  error
+  error,
+  savedResults,
+  onViewResult
 }: {
   onStart: () => void;
   error: string | null;
+  savedResults: SavedResult[];
+  onViewResult: (result: SavedResult) => void;
 }) {
   return (
-    <div className='flex flex-col items-center justify-center gap-6 py-20 text-center'>
-      <div className='bg-primary/10 rounded-2xl p-5'>
-        <GlobeIcon className='text-primary size-10' />
+    <div className='mx-auto max-w-sm space-y-8 py-12'>
+      <div className='flex flex-col items-center gap-6 text-center'>
+        <div className='bg-primary/10 rounded-2xl p-5'>
+          <GlobeIcon className='text-primary size-10' />
+        </div>
+        <div className='space-y-2'>
+          <h1 className='text-2xl font-bold'>Flavour Quest</h1>
+          <p className='text-muted-foreground text-sm'>
+            Discover a city and its signature dish through trivia. A different
+            culinary adventure every day.
+          </p>
+        </div>
+        {error && (
+          <p className='max-w-xs rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'>
+            {error}
+          </p>
+        )}
+        <button
+          onClick={onStart}
+          className='bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-xl px-6 py-3 font-semibold transition-colors'
+        >
+          <UtensilsIcon className='size-4' />
+          Start Flavour Quest
+        </button>
       </div>
-      <div className='space-y-2'>
-        <h1 className='text-2xl font-bold'>Flavour Quest</h1>
-        <p className='text-muted-foreground max-w-xs text-sm'>
-          Discover a city and its signature dish through trivia. A different
-          culinary adventure every day.
-        </p>
-      </div>
-      {error && (
-        <p className='max-w-xs rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'>
-          {error}
-        </p>
+
+      {savedResults.length > 0 && (
+        <div className='space-y-3'>
+          <p className='text-muted-foreground text-center text-xs font-semibold uppercase tracking-wide'>
+            Past Adventures
+          </p>
+          <div className='space-y-2'>
+            {savedResults.map((r, i) => (
+              <PastResultCard key={i} result={r} onView={() => onViewResult(r)} />
+            ))}
+          </div>
+        </div>
       )}
-      <button
-        onClick={onStart}
-        className='bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-xl px-6 py-3 font-semibold transition-colors'
-      >
-        <UtensilsIcon className='size-4' />
-        Start Flavour Quest
-      </button>
     </div>
   );
 }
@@ -135,8 +193,6 @@ function QuestionScreen({
     setTimeout(() => onAnswer(choice), 1400);
   };
 
-  const isCorrect = (choice: string) => choice === question.answer;
-
   return (
     <div className='mx-auto max-w-sm space-y-6 py-10'>
       <div className='flex items-center justify-between text-xs text-muted-foreground'>
@@ -162,7 +218,7 @@ function QuestionScreen({
           if (!answered) {
             cls += ' hover:border-primary cursor-pointer';
           } else {
-            if (isCorrect(choice)) {
+            if (choice === question.answer) {
               cls +=
                 ' border-green-500 bg-green-50 dark:bg-green-950/40 font-medium';
             } else if (choice === selected) {
@@ -186,7 +242,13 @@ function QuestionScreen({
 
       {answered && (
         <div className='rounded-xl border border-dashed p-4 text-sm leading-relaxed text-muted-foreground'>
-          <span className={selected === question.answer ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+          <span
+            className={
+              selected === question.answer
+                ? 'text-green-600 dark:text-green-400'
+                : 'text-red-600 dark:text-red-400'
+            }
+          >
             {selected === question.answer ? '✓ Correct! ' : '✗ Not quite. '}
           </span>
           {question.explanation}
@@ -283,12 +345,14 @@ function CultureCard({
   session,
   score,
   imageUrl,
-  onPlayAgain
+  onPlayAgain,
+  isReadOnly = false
 }: {
   session: GameSession;
   score: number;
   imageUrl: string;
   onPlayAgain: () => void;
+  isReadOnly?: boolean;
 }) {
   const isPerfect = score === session.questions.length;
 
@@ -302,7 +366,9 @@ function CultureCard({
         <p className='text-sm text-muted-foreground'>
           {session.city} · {session.country}
         </p>
-        <p className='text-lg font-semibold'>{score} / {session.questions.length} correct</p>
+        <p className='text-lg font-semibold'>
+          {score} / {session.questions.length} correct
+        </p>
       </div>
 
       <div className='aspect-[4/3] overflow-hidden rounded-2xl border'>
@@ -341,7 +407,7 @@ function CultureCard({
         onClick={onPlayAgain}
         className='bg-primary text-primary-foreground hover:bg-primary/90 w-full rounded-xl px-6 py-3 font-semibold transition-colors'
       >
-        Play Again
+        {isReadOnly ? '← Back' : 'Play Again'}
       </button>
     </div>
   );
@@ -358,6 +424,12 @@ export function GameView() {
   const [score, setScore] = useState(0);
   const [imageUrl, setImageUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [savedResults, setSavedResults] = useState<SavedResult[]>([]);
+  const [viewingResult, setViewingResult] = useState<SavedResult | null>(null);
+
+  useEffect(() => {
+    setSavedResults(getSavedResults());
+  }, []);
 
   const loadCities = async () => {
     setStage('loading-cities');
@@ -410,8 +482,9 @@ export function GameView() {
       setQuestionIndex(0);
       setScore(0);
       setStage('question');
-    } catch {
-      setError('Failed to start game. Please try again.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to start game';
+      setError(msg);
       setStage('city-select');
     }
   };
@@ -422,21 +495,20 @@ export function GameView() {
     const newScore = score + (correct ? 1 : 0);
     const nextIndex = questionIndex + 1;
 
-    // Find the last city-act question index dynamically
     const lastCityIndex = session.questions.reduce(
       (last, q, i) => (q.act === 'city' ? i : last),
       -1
     );
     const isEndOfCityAct =
-      lastCityIndex >= 0 && questionIndex === lastCityIndex && nextIndex < session.questions.length;
+      lastCityIndex >= 0 &&
+      questionIndex === lastCityIndex &&
+      nextIndex < session.questions.length;
 
     if (isEndOfCityAct) {
-      // End of city act → show transition
       setScore(newScore);
       setQuestionIndex(nextIndex);
       setStage('transition');
     } else if (nextIndex >= session.questions.length) {
-      // All questions done → reveal
       setScore(newScore);
       setImageUrl(buildImageUrl(session.imagePromptBase, newScore));
       setStage('reveal');
@@ -452,6 +524,17 @@ export function GameView() {
   };
 
   const handlePlayAgain = () => {
+    // Save the completed result before resetting
+    if (session && imageUrl) {
+      const result: SavedResult = {
+        session,
+        score,
+        imageUrl,
+        date: todayKey()
+      };
+      saveResult(result);
+      setSavedResults(getSavedResults());
+    }
     setStage('idle');
     setSession(null);
     setSelectedCity(null);
@@ -461,8 +544,39 @@ export function GameView() {
     setError(null);
   };
 
+  const handleViewResult = (result: SavedResult) => {
+    setViewingResult(result);
+    setStage('previous-result');
+  };
+
+  const handleBackFromResult = () => {
+    setViewingResult(null);
+    setStage('idle');
+  };
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   if (stage === 'idle') {
-    return <IdleScreen onStart={loadCities} error={error} />;
+    return (
+      <IdleScreen
+        onStart={loadCities}
+        error={error}
+        savedResults={savedResults}
+        onViewResult={handleViewResult}
+      />
+    );
+  }
+
+  if (stage === 'previous-result' && viewingResult) {
+    return (
+      <CultureCard
+        session={viewingResult.session}
+        score={viewingResult.score}
+        imageUrl={viewingResult.imageUrl}
+        onPlayAgain={handleBackFromResult}
+        isReadOnly
+      />
+    );
   }
 
   if (stage === 'loading-cities') {
@@ -470,12 +584,7 @@ export function GameView() {
   }
 
   if (stage === 'city-select') {
-    return (
-      <CitySelectScreen
-        cities={cities}
-        onSelect={selectCity}
-      />
-    );
+    return <CitySelectScreen cities={cities} onSelect={selectCity} />;
   }
 
   if (stage === 'loading-session') {
