@@ -24,6 +24,13 @@ export interface GameSession {
   imagePromptBase: string;
 }
 
+export interface SavedResult {
+  session: GameSession;
+  score: number;
+  imageUrl: string;
+  date: string;
+}
+
 export type GameStage =
   | 'idle'
   | 'loading-cities'
@@ -32,4 +39,6 @@ export type GameStage =
   | 'question'
   | 'transition'
   | 'reveal'
-  | 'culture-card';
+  | 'culture-card'
+  | 'previous-result';
+
