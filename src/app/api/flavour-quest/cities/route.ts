@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
+export const maxDuration = 30;
+
 const FALLBACK_CITIES = [
   {
     name: 'Oaxaca',

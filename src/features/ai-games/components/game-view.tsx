@@ -395,9 +395,8 @@ export function GameView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ city: city.name, country: city.country })
       });
-      if (!res.ok) throw new Error('Session error');
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
       setSession({
         city: city.name,
         country: city.country,
