@@ -90,8 +90,7 @@ export async function POST(req: NextRequest) {
   try {
     const { text } = await generateText({
       model: pollinations('openai'),
-      prompt,
-      maxTokens: 2000
+      prompt
     });
 
     let parsed: Record<string, unknown>;
