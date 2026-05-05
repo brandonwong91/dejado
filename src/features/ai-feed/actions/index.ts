@@ -107,14 +107,14 @@ export async function createAICharacterAction(
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
-  const avatarPrompt = `cute kawaii portrait avatar of ${name} from ${universe}, digital illustration, clean white background, square format`;
+  const avatarPrompt = `anime style portrait avatar of ${name} from ${universe}, detailed anime illustration, expressive eyes, clean white background, square format`;
   const avatarBase64 = await fetchImageAsBase64(avatarPrompt, {
     model: 'flux',
     width: 256,
     height: 256,
     enhance: true,
     negativePrompt:
-      'realistic, photo, dark background, multiple characters, text, watermark'
+      'realistic, photo, 3d render, dark background, multiple characters, text, watermark'
   });
 
   const [character] = await db
@@ -143,7 +143,7 @@ export async function regenerateCharacterAvatarAction(id: string) {
     height: 256,
     enhance: true,
     negativePrompt:
-      'realistic, photo, dark background, multiple characters, text, watermark'
+      'realistic, photo, 3d render, dark background, multiple characters, text, watermark'
   });
   if (!avatarBase64) throw new Error('Image generation failed');
 
@@ -225,18 +225,18 @@ export async function generateAIPostAction(characterId: string) {
       : '';
 
   const textPrompt = `You are ${character.name} from ${character.universe}.${personalityLine}${storyContext}
-Write a fun, in-character Instagram post about what you're up to today. Be creative and specific — avoid generic statements.
+Write a dramatic, expressive anime-style Instagram post about what you're up to today. Use vivid emotions, exclamations, and the kind of over-the-top energy found in anime — inner monologues, power-ups, sudden plot twists in daily life, rival encounters, etc. Be creative and specific — avoid generic statements.
 Return ONLY a raw JSON object:
-- "caption": 1-3 sentences as ${character.name}, fun and in-character, referencing something concrete
+- "caption": 1-3 sentences as ${character.name}, written with anime flair — dramatic, expressive, and in-character, referencing something concrete happening right now
 - "hashtags": array of 4-6 relevant hashtags (no # symbol)
-- "imagePrompt": vivid scene description for AI image generation showing what ${character.name} is doing (include art style: "cute digital illustration, vibrant colors")`;
+- "imagePrompt": vivid anime scene description for AI image generation showing what ${character.name} is doing (include art style: "anime illustration, vibrant cel-shading, dynamic composition, expressive anime art style, detailed linework")`;
 
   const raw = await callPollinations(textPrompt);
   let caption = `Just another amazing day being ${character.name}!`;
   let hashtags: string[] = [
     character.universe.toLowerCase().replace(/\s+/g, '')
   ];
-  let imagePrompt = `${character.name} from ${character.universe} having a fun day, cute digital illustration`;
+  let imagePrompt = `${character.name} from ${character.universe} in a dynamic anime scene, anime illustration style, vibrant cel-shading, expressive anime art`;
 
   try {
     const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
@@ -253,7 +253,7 @@ Return ONLY a raw JSON object:
     width: 512,
     height: 512,
     enhance: true,
-    negativePrompt: 'ugly, blurry, low quality, text, watermark, nsfw'
+    negativePrompt: 'ugly, blurry, low quality, text, watermark, nsfw, realistic, photorealistic, 3d render'
   });
 
   // 3. Persist
