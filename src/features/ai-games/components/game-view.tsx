@@ -1,436 +1,528 @@
 'use client';
 
-import { useState, useTransition, useRef, useEffect } from 'react';
-import { Loader2Icon, PuzzleIcon, SendIcon } from 'lucide-react';
-import { toast } from 'sonner';
-import { startGameAction, evaluateGuessAction } from '../actions';
+import { useState, useEffect } from 'react';
+import { Loader2Icon, GlobeIcon, UtensilsIcon } from 'lucide-react';
+import type { City, GameSession, GameStage, Question } from '../types';
 import {
-  type GameState,
-  type Guess,
-  type Temperature,
-  MAX_GUESSES
-} from '../types';
+  getPlayedCities,
+  getCachedCities,
+  cacheCities,
+  addPlayedCity
+} from '../utils/cityHistory';
 
-const TEMP_CONFIG: Record<
-  Temperature,
-  { label: string; emoji: string; bg: string; text: string; border: string }
-> = {
-  Frozen: {
-    label: 'Frozen',
-    emoji: '❄️',
-    bg: 'bg-blue-50 dark:bg-blue-950/40',
-    text: 'text-blue-500',
-    border: 'border-blue-200 dark:border-blue-800'
-  },
-  Cold: {
-    label: 'Cold',
-    emoji: '🧊',
-    bg: 'bg-blue-50 dark:bg-blue-950/40',
-    text: 'text-blue-600',
-    border: 'border-blue-200 dark:border-blue-800'
-  },
-  Cool: {
-    label: 'Cool',
-    emoji: '💧',
-    bg: 'bg-cyan-50 dark:bg-cyan-950/40',
-    text: 'text-cyan-600',
-    border: 'border-cyan-200 dark:border-cyan-800'
-  },
-  Lukewarm: {
-    label: 'Lukewarm',
-    emoji: '🌤️',
-    bg: 'bg-yellow-50 dark:bg-yellow-950/40',
-    text: 'text-yellow-600',
-    border: 'border-yellow-200 dark:border-yellow-800'
-  },
-  Warm: {
-    label: 'Warm',
-    emoji: '🌅',
-    bg: 'bg-orange-50 dark:bg-orange-950/40',
-    text: 'text-orange-500',
-    border: 'border-orange-200 dark:border-orange-800'
-  },
-  Hot: {
-    label: 'Hot',
-    emoji: '🔥',
-    bg: 'bg-orange-50 dark:bg-orange-950/40',
-    text: 'text-orange-600',
-    border: 'border-orange-300 dark:border-orange-700'
-  },
-  Scorching: {
-    label: 'Scorching',
-    emoji: '🌋',
-    bg: 'bg-red-50 dark:bg-red-950/40',
-    text: 'text-red-600',
-    border: 'border-red-300 dark:border-red-700'
-  },
-  'On fire!': {
-    label: 'On fire!',
-    emoji: '✨',
-    bg: 'bg-green-50 dark:bg-green-950/40',
-    text: 'text-green-600',
-    border: 'border-green-300 dark:border-green-700'
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function buildImageUrl(base: string, score: number): string {
+  let prompt = base;
+  if (score === 5) {
+    prompt = `${base}, shot by a Michelin-starred restaurant photographer, hero lighting, garnished beautifully, warm tones`;
+  } else if (score <= 2) {
+    prompt = `${base}, clean honest depiction, simple presentation`;
   }
-};
-
-function ScoreDots({ score }: { score: number }) {
-  return (
-    <div className='flex gap-0.5'>
-      {Array.from({ length: 10 }).map((_, i) => (
-        <div
-          key={i}
-          className={`h-1.5 w-1.5 rounded-full ${
-            i < score ? 'bg-current opacity-80' : 'bg-current opacity-10'
-          }`}
-        />
-      ))}
-    </div>
-  );
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=600&nologo=true&seed=${Date.now()}`;
 }
 
-function GuessRow({ guess, index }: { guess: Guess; index: number }) {
-  const cfg = TEMP_CONFIG[guess.temperature];
+// ── Idle ─────────────────────────────────────────────────────────────────────
+
+function IdleScreen({
+  onStart,
+  error
+}: {
+  onStart: () => void;
+  error: string | null;
+}) {
   return (
-    <div
-      className={`rounded-xl border p-3 transition-all ${cfg.bg} ${cfg.border}`}
-    >
-      <div className='flex items-center justify-between gap-2'>
-        <div className='flex min-w-0 items-center gap-2'>
-          <span className='text-muted-foreground w-5 shrink-0 text-right text-xs tabular-nums'>
-            {index + 1}
-          </span>
-          <span className='font-semibold capitalize'>{guess.word}</span>
-        </div>
-        <div className={`flex shrink-0 items-center gap-1.5 ${cfg.text}`}>
-          <ScoreDots score={guess.score} />
-          <span className='text-xs font-medium whitespace-nowrap'>
-            {cfg.emoji} {cfg.label}
-          </span>
-        </div>
+    <div className='flex flex-col items-center justify-center gap-6 py-20 text-center'>
+      <div className='bg-primary/10 rounded-2xl p-5'>
+        <GlobeIcon className='text-primary size-10' />
       </div>
-      <p className='text-muted-foreground mt-1.5 pl-7 text-xs leading-relaxed italic'>
-        {guess.hint}
-      </p>
+      <div className='space-y-2'>
+        <h1 className='text-2xl font-bold'>Flavour Quest</h1>
+        <p className='text-muted-foreground max-w-xs text-sm'>
+          Discover a city and its signature dish through trivia. A different
+          culinary adventure every day.
+        </p>
+      </div>
+      {error && (
+        <p className='max-w-xs rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'>
+          {error}
+        </p>
+      )}
+      <button
+        onClick={onStart}
+        className='bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-xl px-6 py-3 font-semibold transition-colors'
+      >
+        <UtensilsIcon className='size-4' />
+        Start Flavour Quest
+      </button>
     </div>
   );
 }
 
-function MidnightCountdown() {
-  const [timeLeft, setTimeLeft] = useState('...');
+// ── Loading ───────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    function update() {
-      const now = new Date();
-      const midnight = new Date();
-      midnight.setUTCDate(midnight.getUTCDate() + 1);
-      midnight.setUTCHours(0, 0, 0, 0);
-      const diff = midnight.getTime() - now.getTime();
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(
-        `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
-      );
-    }
-    update();
-    const id = setInterval(update, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  return <span className='font-mono tabular-nums'>{timeLeft}</span>;
+function LoadingScreen({ message }: { message: string }) {
+  return (
+    <div className='flex flex-col items-center justify-center gap-4 py-20 text-center'>
+      <Loader2Icon className='text-primary size-8 animate-spin' />
+      <p className='text-muted-foreground text-sm'>{message}</p>
+    </div>
+  );
 }
 
-const INITIAL_STATE: GameState = {
-  status: 'idle',
-  secretWord: '',
-  category: '',
-  openingRiddle: '',
-  guesses: [],
-  maxGuesses: MAX_GUESSES
-};
+// ── City Select ───────────────────────────────────────────────────────────────
+
+function CitySelectScreen({
+  cities,
+  onSelect
+}: {
+  cities: City[];
+  onSelect: (city: City) => void;
+}) {
+  return (
+    <div className='mx-auto max-w-2xl space-y-6 py-10'>
+      <div className='space-y-2 text-center'>
+        <h2 className='text-xl font-bold'>Choose Your City</h2>
+        <p className='text-muted-foreground text-sm'>
+          Pick a destination to explore its food culture
+        </p>
+      </div>
+      <div className='grid gap-4 sm:grid-cols-3'>
+        {cities.map((city) => (
+          <button
+            key={city.name}
+            onClick={() => onSelect(city)}
+            className='group rounded-2xl border p-5 text-left transition-all hover:border-primary hover:shadow-md'
+          >
+            <div className='space-y-2'>
+              <div>
+                <h3 className='text-lg font-bold'>{city.name}</h3>
+                <p className='text-muted-foreground text-xs'>{city.country}</p>
+              </div>
+              <p className='text-sm leading-relaxed'>{city.teaser}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Question ──────────────────────────────────────────────────────────────────
+
+function QuestionScreen({
+  question,
+  questionNumber,
+  totalQuestions,
+  score,
+  onAnswer
+}: {
+  question: Question;
+  questionNumber: number;
+  totalQuestions: number;
+  score: number;
+  onAnswer: (choice: string) => void;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const [answered, setAnswered] = useState(false);
+
+  const handleChoice = (choice: string) => {
+    if (answered) return;
+    setSelected(choice);
+    setAnswered(true);
+    setTimeout(() => onAnswer(choice), 1400);
+  };
+
+  const isCorrect = (choice: string) => choice === question.answer;
+
+  return (
+    <div className='mx-auto max-w-sm space-y-6 py-10'>
+      <div className='flex items-center justify-between text-xs text-muted-foreground'>
+        <span>
+          Question {questionNumber} of {totalQuestions}
+        </span>
+        <span>{score} correct</span>
+      </div>
+
+      <div className='bg-muted/50 space-y-2 rounded-2xl border p-5'>
+        <span className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+          {question.act === 'city' ? 'City Round' : 'Food Round'}
+        </span>
+        <p className='text-base font-semibold leading-relaxed'>
+          {question.question}
+        </p>
+      </div>
+
+      <div className='space-y-3'>
+        {question.choices.map((choice) => {
+          let cls =
+            'w-full rounded-xl border p-4 text-left text-sm transition-all';
+          if (!answered) {
+            cls += ' hover:border-primary cursor-pointer';
+          } else {
+            if (isCorrect(choice)) {
+              cls +=
+                ' border-green-500 bg-green-50 dark:bg-green-950/40 font-medium';
+            } else if (choice === selected) {
+              cls += ' border-red-400 bg-red-50 dark:bg-red-950/40';
+            } else {
+              cls += ' opacity-40';
+            }
+          }
+          return (
+            <button
+              key={choice}
+              className={cls}
+              onClick={() => handleChoice(choice)}
+              disabled={answered}
+            >
+              {choice}
+            </button>
+          );
+        })}
+      </div>
+
+      {answered && (
+        <div className='rounded-xl border border-dashed p-4 text-sm leading-relaxed text-muted-foreground'>
+          <span className={selected === question.answer ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+            {selected === question.answer ? '✓ Correct! ' : '✗ Not quite. '}
+          </span>
+          {question.explanation}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Transition ────────────────────────────────────────────────────────────────
+
+function TransitionScreen({
+  line,
+  onContinue
+}: {
+  line: string;
+  onContinue: () => void;
+}) {
+  return (
+    <div className='flex flex-col items-center justify-center gap-8 py-24 text-center'>
+      <div className='max-w-sm space-y-4'>
+        <p className='text-xs uppercase tracking-widest text-muted-foreground'>
+          Now entering
+        </p>
+        <h2 className='text-2xl font-bold'>The Food Act</h2>
+        <p className='text-lg italic leading-relaxed text-muted-foreground'>
+          &ldquo;{line}&rdquo;
+        </p>
+      </div>
+      <button
+        onClick={onContinue}
+        className='bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl px-6 py-3 font-semibold transition-colors'
+      >
+        Continue
+      </button>
+    </div>
+  );
+}
+
+// ── Reveal ────────────────────────────────────────────────────────────────────
+
+function RevealScreen({
+  dish,
+  city,
+  imageUrl,
+  onContinue
+}: {
+  dish: string;
+  city: string;
+  imageUrl: string;
+  onContinue: () => void;
+}) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  return (
+    <div className='mx-auto max-w-sm space-y-6 py-10 text-center'>
+      <div className='space-y-1'>
+        <p className='text-xs uppercase tracking-widest text-muted-foreground'>
+          The dish is...
+        </p>
+        <h2 className='text-3xl font-bold'>{dish}</h2>
+        <p className='text-sm text-muted-foreground'>{city}</p>
+      </div>
+
+      <div className='relative aspect-[4/3] overflow-hidden rounded-2xl border bg-muted'>
+        {!imageLoaded && (
+          <div className='absolute inset-0 flex items-center justify-center'>
+            <Loader2Icon className='size-8 animate-spin text-muted-foreground' />
+          </div>
+        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={dish}
+          className={`h-full w-full object-cover transition-opacity duration-700 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => setImageLoaded(true)}
+          onError={() => setImageLoaded(true)}
+        />
+      </div>
+
+      <button
+        onClick={onContinue}
+        className='bg-primary text-primary-foreground hover:bg-primary/90 w-full rounded-xl px-6 py-3 font-semibold transition-colors'
+      >
+        See Culture Card
+      </button>
+    </div>
+  );
+}
+
+// ── Culture Card ──────────────────────────────────────────────────────────────
+
+function CultureCard({
+  session,
+  score,
+  imageUrl,
+  onPlayAgain
+}: {
+  session: GameSession;
+  score: number;
+  imageUrl: string;
+  onPlayAgain: () => void;
+}) {
+  const isPerfect = score === 5;
+
+  return (
+    <div className='mx-auto max-w-sm space-y-6 py-10'>
+      <div className='space-y-2 text-center'>
+        <div className='text-4xl'>
+          {isPerfect ? '🏆' : score >= 3 ? '🌟' : '🌍'}
+        </div>
+        <h2 className='text-2xl font-bold'>{session.dish}</h2>
+        <p className='text-sm text-muted-foreground'>
+          {session.city} · {session.country}
+        </p>
+        <p className='text-lg font-semibold'>{score} / 5 correct</p>
+      </div>
+
+      <div className='aspect-[4/3] overflow-hidden rounded-2xl border'>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={session.dish}
+          className='h-full w-full object-cover'
+        />
+      </div>
+
+      <div className='space-y-3 rounded-2xl border p-5'>
+        <h3 className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+          Food Facts
+        </h3>
+        <ul className='space-y-2'>
+          {session.funFacts.map((fact, i) => (
+            <li key={i} className='flex gap-2 text-sm'>
+              <span className='text-muted-foreground'>•</span>
+              <span>{fact}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {isPerfect && session.localsTip && (
+        <div className='space-y-2 rounded-2xl border border-yellow-200 bg-yellow-50 p-5 dark:border-yellow-800 dark:bg-yellow-950/40'>
+          <h3 className='text-xs font-semibold text-yellow-700 dark:text-yellow-400'>
+            🔑 Local&apos;s Tip
+          </h3>
+          <p className='text-sm text-muted-foreground'>{session.localsTip}</p>
+        </div>
+      )}
+
+      <button
+        onClick={onPlayAgain}
+        className='bg-primary text-primary-foreground hover:bg-primary/90 w-full rounded-xl px-6 py-3 font-semibold transition-colors'
+      >
+        Play Again
+      </button>
+    </div>
+  );
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 export function GameView() {
-  const [game, setGame] = useState<GameState>(INITIAL_STATE);
-  const [input, setInput] = useState('');
-  const [isStarting, startTransition] = useTransition();
-  const [isEvaluating, evaluateTransition] = useTransition();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const guessListRef = useRef<HTMLDivElement>(null);
+  const [stage, setStage] = useState<GameStage>('idle');
+  const [cities, setCities] = useState<City[]>([]);
+  const [selectedCity, setSelectedCity] = useState<City | null>(null);
+  const [session, setSession] = useState<GameSession | null>(null);
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [score, setScore] = useState(0);
+  const [imageUrl, setImageUrl] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (game.status === 'playing') {
-      inputRef.current?.focus();
-    }
-  }, [game.status]);
-
-  useEffect(() => {
-    if (game.guesses.length > 0) {
-      guessListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  }, [game.guesses.length]);
-
-  const handleStart = () => {
-    startTransition(async () => {
-      setGame({ ...INITIAL_STATE, status: 'loading' });
-      try {
-        const result = await startGameAction();
-        const displayGuesses = [...result.existingGuesses].reverse();
-        setGame({
-          status: result.status,
-          secretWord: result.word,
-          category: result.category,
-          openingRiddle: result.openingRiddle,
-          guesses: displayGuesses,
-          maxGuesses: MAX_GUESSES
-        });
-      } catch {
-        toast.error('Failed to start game. Please try again.');
-        setGame(INITIAL_STATE);
-      }
-    });
-  };
-
-  const handleGuess = () => {
-    const word = input.trim().toLowerCase();
-    if (!word || word.length < 2) return;
-    if (game.guesses.some((g) => g.word === word)) {
-      toast.info('Already guessed that word!');
+  const loadCities = async () => {
+    setStage('loading-cities');
+    setError(null);
+    const today = todayKey();
+    const cached = getCachedCities(today);
+    if (cached && cached.length >= 3) {
+      setCities(cached);
+      setStage('city-select');
       return;
     }
-
-    setInput('');
-    evaluateTransition(async () => {
-      setGame((prev) => ({ ...prev, status: 'evaluating' }));
-      try {
-        const result = await evaluateGuessAction(game.secretWord, word);
-        const newGuess: Guess = {
-          word,
-          score: result.score,
-          temperature: result.temperature,
-          hint: result.hint
-        };
-        setGame((prev) => ({
-          ...prev,
-          status: result.status,
-          guesses: [newGuess, ...prev.guesses]
-        }));
-      } catch {
-        toast.error('Failed to evaluate guess. Please try again.');
-        setGame((prev) => ({ ...prev, status: 'playing' }));
-        setInput(word);
-      }
-    });
+    try {
+      const played = getPlayedCities();
+      const res = await fetch(
+        `/api/flavour-quest/cities?played=${encodeURIComponent(JSON.stringify(played))}`
+      );
+      if (!res.ok) throw new Error('Failed to load cities');
+      const data: City[] = await res.json();
+      cacheCities(today, data);
+      setCities(data);
+      setStage('city-select');
+    } catch {
+      setError('Failed to load cities. Please try again.');
+      setStage('idle');
+    }
   };
 
-  const guessesLeft = MAX_GUESSES - game.guesses.length;
+  const selectCity = async (city: City) => {
+    setSelectedCity(city);
+    setStage('loading-session');
+    setError(null);
+    try {
+      const res = await fetch('/api/flavour-quest/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ city: city.name, country: city.country })
+      });
+      if (!res.ok) throw new Error('Session error');
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setSession({
+        city: city.name,
+        country: city.country,
+        dish: data.dish,
+        questions: data.questions,
+        transitionLine: data.transition_line,
+        funFacts: data.fun_facts,
+        localsTip: data.locals_tip,
+        imagePromptBase: data.image_prompt_base
+      });
+      setQuestionIndex(0);
+      setScore(0);
+      setStage('question');
+    } catch {
+      setError('Failed to start game. Please try again.');
+      setStage('city-select');
+    }
+  };
 
-  // ── Idle ────────────────────────────────────────────────────────────────────
-  if (game.status === 'idle') {
+  const handleAnswer = (choice: string) => {
+    if (!session) return;
+    const correct = choice === session.questions[questionIndex].answer;
+    const newScore = score + (correct ? 1 : 0);
+    const nextIndex = questionIndex + 1;
+
+    if (questionIndex === 1) {
+      // End of city act → show transition
+      setScore(newScore);
+      setQuestionIndex(nextIndex);
+      setStage('transition');
+    } else if (nextIndex >= session.questions.length) {
+      // All questions done → reveal
+      setScore(newScore);
+      setImageUrl(buildImageUrl(session.imagePromptBase, newScore));
+      setStage('reveal');
+    } else {
+      setScore(newScore);
+      setQuestionIndex(nextIndex);
+    }
+  };
+
+  const handleRevealContinue = () => {
+    if (selectedCity) addPlayedCity(selectedCity.name);
+    setStage('culture-card');
+  };
+
+  const handlePlayAgain = () => {
+    setStage('idle');
+    setSession(null);
+    setSelectedCity(null);
+    setQuestionIndex(0);
+    setScore(0);
+    setImageUrl('');
+    setError(null);
+  };
+
+  if (stage === 'idle') {
+    return <IdleScreen onStart={loadCities} error={error} />;
+  }
+
+  if (stage === 'loading-cities') {
+    return <LoadingScreen message="Finding today's cities..." />;
+  }
+
+  if (stage === 'city-select') {
     return (
-      <div className='flex flex-col items-center justify-center gap-6 py-20 text-center'>
-        <div className='bg-primary/10 rounded-2xl p-5'>
-          <PuzzleIcon className='text-primary size-10' />
-        </div>
-        <div className='space-y-2'>
-          <h1 className='text-2xl font-bold'>Semantic Hunt</h1>
-          <p className='text-muted-foreground max-w-xs text-sm'>
-            The oracle picks a secret concept. You have{' '}
-            <strong>{MAX_GUESSES} guesses</strong> to find it by navigating
-            through meaning — not letters.
-          </p>
-        </div>
-        <div className='text-muted-foreground max-w-xs rounded-xl border border-dashed p-4 text-xs leading-relaxed'>
-          Each guess reveals how <em>semantically close</em> you are. Follow the
-          temperature — from Frozen all the way to{' '}
-          <span className='font-semibold text-green-600'>On fire!</span>
-        </div>
-        <button
-          onClick={handleStart}
-          className='bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-xl px-6 py-3 font-semibold transition-colors'
-        >
-          <PuzzleIcon className='size-4' />
-          Start Game
-        </button>
-      </div>
+      <CitySelectScreen
+        cities={cities}
+        onSelect={selectCity}
+      />
     );
   }
 
-  // ── Loading (startGame) ──────────────────────────────────────────────────────
-  if (game.status === 'loading' || (isStarting && game.status !== 'playing')) {
+  if (stage === 'loading-session') {
     return (
-      <div className='flex flex-col items-center justify-center gap-4 py-20 text-center'>
-        <Loader2Icon className='text-primary size-8 animate-spin' />
-        <p className='text-muted-foreground text-sm'>
-          The oracle is choosing a concept...
-        </p>
-      </div>
+      <LoadingScreen
+        message={`Preparing your adventure in ${selectedCity?.name ?? 'the city'}...`}
+      />
     );
   }
 
-  // ── Won ─────────────────────────────────────────────────────────────────────
-  if (game.status === 'won') {
+  if (stage === 'question' && session) {
+    const question = session.questions[questionIndex];
     return (
-      <div className='mx-auto max-w-sm space-y-4 py-10'>
-        <div className='rounded-2xl border border-green-200 bg-green-50 p-6 text-center dark:border-green-800 dark:bg-green-950/40'>
-          <div className='text-4xl'>✨</div>
-          <h2 className='mt-2 text-xl font-bold text-green-700 dark:text-green-400'>
-            You found it!
-          </h2>
-          <p className='text-muted-foreground mt-1 text-sm'>
-            The word was{' '}
-            <strong className='text-foreground capitalize'>
-              {game.secretWord}
-            </strong>{' '}
-            — found in{' '}
-            <strong>
-              {game.guesses.length} guess
-              {game.guesses.length !== 1 ? 'es' : ''}
-            </strong>
-            .
-          </p>
-        </div>
-        <div className='space-y-1 rounded-xl border border-dashed p-4 text-center'>
-          <p className='text-muted-foreground text-sm'>Next puzzle in</p>
-          <p className='text-2xl font-bold'>
-            <MidnightCountdown />
-          </p>
-        </div>
-        <div className='space-y-2' ref={guessListRef}>
-          {game.guesses.map((g, i) => (
-            <GuessRow
-              key={g.word}
-              guess={g}
-              index={game.guesses.length - 1 - i}
-            />
-          ))}
-        </div>
-      </div>
+      <QuestionScreen
+        key={questionIndex}
+        question={question}
+        questionNumber={questionIndex + 1}
+        totalQuestions={session.questions.length}
+        score={score}
+        onAnswer={handleAnswer}
+      />
     );
   }
 
-  // ── Lost ─────────────────────────────────────────────────────────────────────
-  if (game.status === 'lost') {
+  if (stage === 'transition' && session) {
     return (
-      <div className='mx-auto max-w-sm space-y-4 py-10'>
-        <div className='rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/40'>
-          <div className='text-4xl'>🌑</div>
-          <h2 className='mt-2 text-xl font-bold text-red-700 dark:text-red-400'>
-            The oracle wins this round.
-          </h2>
-          <p className='text-muted-foreground mt-1 text-sm'>
-            The word was{' '}
-            <strong className='text-foreground capitalize'>
-              {game.secretWord}
-            </strong>
-            .
-          </p>
-        </div>
-        <div className='space-y-1 rounded-xl border border-dashed p-4 text-center'>
-          <p className='text-muted-foreground text-sm'>Next puzzle in</p>
-          <p className='text-2xl font-bold'>
-            <MidnightCountdown />
-          </p>
-        </div>
-        <div className='space-y-2' ref={guessListRef}>
-          {game.guesses.map((g, i) => (
-            <GuessRow
-              key={g.word}
-              guess={g}
-              index={game.guesses.length - 1 - i}
-            />
-          ))}
-        </div>
-      </div>
+      <TransitionScreen
+        line={session.transitionLine}
+        onContinue={() => setStage('question')}
+      />
     );
   }
 
-  // ── Playing / Evaluating ─────────────────────────────────────────────────────
-  const isEvaluatingNow = game.status === 'evaluating' || isEvaluating;
+  if (stage === 'reveal' && session) {
+    return (
+      <RevealScreen
+        dish={session.dish}
+        city={`${session.city}, ${session.country}`}
+        imageUrl={imageUrl}
+        onContinue={handleRevealContinue}
+      />
+    );
+  }
 
-  return (
-    <div className='mx-auto max-w-sm space-y-4 pb-20'>
-      {/* Header card */}
-      <div className='bg-muted/50 space-y-2 rounded-2xl border p-4'>
-        <div className='flex items-center justify-between'>
-          <span className='bg-primary/10 text-primary rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize'>
-            {game.category}
-          </span>
-          <span className='text-muted-foreground text-xs tabular-nums'>
-            {game.guesses.length} / {MAX_GUESSES} guesses
-          </span>
-        </div>
-        <p className='text-sm leading-relaxed italic'>{game.openingRiddle}</p>
-        {/* Guess meter */}
-        <div className='flex gap-1 pt-1'>
-          {Array.from({ length: MAX_GUESSES }).map((_, i) => (
-            <div
-              key={i}
-              className={`h-1 flex-1 rounded-full transition-colors ${
-                i < game.guesses.length ? 'bg-primary' : 'bg-border'
-              }`}
-            />
-          ))}
-        </div>
-      </div>
+  if (stage === 'culture-card' && session) {
+    return (
+      <CultureCard
+        session={session}
+        score={score}
+        imageUrl={imageUrl}
+        onPlayAgain={handlePlayAgain}
+      />
+    );
+  }
 
-      {/* Input row */}
-      <div className='flex gap-2'>
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleGuess();
-          }}
-          placeholder='Type a word...'
-          disabled={isEvaluatingNow}
-          maxLength={40}
-          className='border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring flex-1 rounded-xl border px-4 py-2.5 text-sm outline-none focus-visible:ring-2 disabled:opacity-50'
-        />
-        <button
-          onClick={handleGuess}
-          disabled={isEvaluatingNow || !input.trim()}
-          className='bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50'
-        >
-          {isEvaluatingNow ? (
-            <Loader2Icon className='size-4 animate-spin' />
-          ) : (
-            <SendIcon className='size-4' />
-          )}
-        </button>
-      </div>
-
-      {isEvaluatingNow && (
-        <p className='text-muted-foreground animate-pulse text-center text-xs'>
-          Consulting the oracle...
-        </p>
-      )}
-
-      {/* Guesses left warning */}
-      {guessesLeft <= 3 && guessesLeft > 0 && !isEvaluatingNow && (
-        <p className='text-center text-xs font-medium text-orange-600 dark:text-orange-400'>
-          {guessesLeft} guess{guessesLeft !== 1 ? 'es' : ''} remaining!
-        </p>
-      )}
-
-      {/* Guess history */}
-      {game.guesses.length > 0 && (
-        <div className='space-y-2' ref={guessListRef}>
-          {game.guesses.map((g, i) => (
-            <GuessRow
-              key={g.word}
-              guess={g}
-              index={game.guesses.length - 1 - i}
-            />
-          ))}
-        </div>
-      )}
-
-      {game.guesses.length === 0 && !isEvaluatingNow && (
-        <div className='text-muted-foreground py-8 text-center text-sm'>
-          Make your first guess above.
-        </div>
-      )}
-    </div>
-  );
+  return null;
 }
