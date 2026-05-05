@@ -1,13 +1,30 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { generateText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
 
 export const maxDuration = 60;
 
-const pollinations = createOpenAI({
-  baseURL: 'https://gen.pollinations.ai/v1',
-  apiKey: process.env.POLLINATIONS_API_KEY ?? ''
-});
+async function callLLM(prompt: string): Promise<string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (process.env.POLLINATIONS_API_KEY) {
+    headers['Authorization'] = `Bearer ${process.env.POLLINATIONS_API_KEY}`;
+  }
+  const res = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'openai',
+      jsonMode: true,
+      temperature: 0.7
+    }),
+    signal: AbortSignal.timeout(55_000)
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`LLM API ${res.status}: ${body}`);
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content ?? '';
+}
 
 function extractJson(raw: string): unknown {
   let text = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
@@ -88,24 +105,20 @@ export async function POST(req: NextRequest) {
   const prompt = buildPrompt(city, country);
 
   try {
-    const { text } = await generateText({
-      model: pollinations('openai'),
-      prompt
-    });
+    const raw = await callLLM(prompt);
 
     let parsed: Record<string, unknown>;
     try {
-      parsed = extractJson(text) as Record<string, unknown>;
+      parsed = extractJson(raw) as Record<string, unknown>;
     } catch (parseErr) {
-      console.error('[flavour-quest/session] JSON parse failed. Raw response:', text);
+      console.error('[flavour-quest/session] JSON parse failed. Raw response:', raw.slice(0, 500));
       throw new Error(`JSON parse failed: ${parseErr}`);
     }
 
     if (!parsed.dish || !Array.isArray(parsed.questions) || (parsed.questions as unknown[]).length < 3) {
       console.error('[flavour-quest/session] Validation failed:', {
         hasDish: !!parsed.dish,
-        questionCount: Array.isArray(parsed.questions) ? parsed.questions.length : 'not array',
-        raw: text.slice(0, 300)
+        questionCount: Array.isArray(parsed.questions) ? parsed.questions.length : 'not array'
       });
       throw new Error('LLM returned invalid session structure');
     }
