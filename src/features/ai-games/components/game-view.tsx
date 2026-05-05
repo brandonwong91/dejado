@@ -290,7 +290,7 @@ function CultureCard({
   imageUrl: string;
   onPlayAgain: () => void;
 }) {
-  const isPerfect = score === 5;
+  const isPerfect = score === session.questions.length;
 
   return (
     <div className='mx-auto max-w-sm space-y-6 py-10'>
@@ -302,7 +302,7 @@ function CultureCard({
         <p className='text-sm text-muted-foreground'>
           {session.city} · {session.country}
         </p>
-        <p className='text-lg font-semibold'>{score} / 5 correct</p>
+        <p className='text-lg font-semibold'>{score} / {session.questions.length} correct</p>
       </div>
 
       <div className='aspect-[4/3] overflow-hidden rounded-2xl border'>
@@ -423,7 +423,15 @@ export function GameView() {
     const newScore = score + (correct ? 1 : 0);
     const nextIndex = questionIndex + 1;
 
-    if (questionIndex === 1) {
+    // Find the last city-act question index dynamically
+    const lastCityIndex = session.questions.reduce(
+      (last, q, i) => (q.act === 'city' ? i : last),
+      -1
+    );
+    const isEndOfCityAct =
+      lastCityIndex >= 0 && questionIndex === lastCityIndex && nextIndex < session.questions.length;
+
+    if (isEndOfCityAct) {
       // End of city act → show transition
       setScore(newScore);
       setQuestionIndex(nextIndex);
