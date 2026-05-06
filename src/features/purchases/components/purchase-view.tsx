@@ -3,13 +3,15 @@
 import { PurchaseDialog } from './purchase-dialog';
 import { PurchaseCard } from './purchase-card';
 import { PurchaseCalendar } from './purchase-calendar';
+import { InventoryView } from './inventory-view';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ChevronDown,
   ChevronRight,
   ShoppingCartIcon,
-  PackageIcon
+  PackageIcon,
+  LayoutListIcon
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { sendNotification } from '@/lib/notifications';
@@ -101,88 +103,103 @@ export function PurchaseView({ purchases }: PurchaseViewProps) {
   };
 
   return (
-    <div className='space-y-8 pb-10'>
-      <div className='flex flex-col gap-8 lg:flex-row'>
-        {/* Sidebar Panel */}
-        <aside className='w-full lg:w-[350px] lg:shrink-0'>
-          <div className='sticky top-4 space-y-4'>
-            <div className='px-1'>
-              <h3 className='text-muted-foreground text-xs font-semibold tracking-wider uppercase'>
-                Purchase Schedule
-              </h3>
-            </div>
-            <div className='flex justify-center'>
-              <PurchaseCalendar purchases={purchases} />
+    <div className='space-y-6 pb-10'>
+      <Tabs defaultValue='shopping' className='w-full'>
+        <TabsList className='bg-muted/40 p-1'>
+          <TabsTrigger value='shopping' className='gap-2 px-5'>
+            <ShoppingCartIcon className='size-4' />
+            Shopping
+          </TabsTrigger>
+          <TabsTrigger value='inventory' className='gap-2 px-5'>
+            <LayoutListIcon className='size-4' />
+            Inventory
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Shopping tab — original layout */}
+        <TabsContent value='shopping' className='mt-6 focus-visible:outline-none'>
+          <div className='flex flex-col gap-8 lg:flex-row'>
+            <aside className='w-full lg:w-[350px] lg:shrink-0'>
+              <div className='sticky top-4 space-y-4'>
+                <div className='px-1'>
+                  <h3 className='text-muted-foreground text-xs font-semibold tracking-wider uppercase'>
+                    Purchase Schedule
+                  </h3>
+                </div>
+                <div className='flex justify-center'>
+                  <PurchaseCalendar purchases={purchases} />
+                </div>
+              </div>
+            </aside>
+
+            <div className='flex-1 space-y-10'>
+              <Tabs defaultValue='Groceries' className='w-full'>
+                <TabsList className='bg-muted/40 mb-6 p-1'>
+                  {categories.map((cat) => (
+                    <TabsTrigger key={cat.id} value={cat.id} className='gap-2 px-6'>
+                      <cat.icon className='size-4' />
+                      {cat.id}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                {categories.map((cat) => (
+                  <TabsContent
+                    key={cat.id}
+                    value={cat.id}
+                    className='space-y-10 focus-visible:outline-none'
+                  >
+                    <section className='space-y-6'>
+                      <button
+                        onClick={() => setToBuyExpanded(!toBuyExpanded)}
+                        className='text-muted-foreground/70 hover:text-foreground flex h-8 items-center gap-2 px-1 transition-colors'
+                      >
+                        {toBuyExpanded ? (
+                          <ChevronDown className='size-4' />
+                        ) : (
+                          <ChevronRight className='size-4' />
+                        )}
+                        <h3 className='text-xs font-medium tracking-wider uppercase'>
+                          To Buy ({filterItems(cat.id, false).length})
+                        </h3>
+                      </button>
+                      {toBuyExpanded && renderList(cat.id, false)}
+                    </section>
+
+                    <Separator className='my-2' />
+
+                    <section className='space-y-6'>
+                      <button
+                        onClick={() => setBoughtExpanded(!boughtExpanded)}
+                        className='text-muted-foreground/50 hover:text-foreground flex h-8 items-center gap-2 px-1 transition-colors'
+                      >
+                        {boughtExpanded ? (
+                          <ChevronDown className='size-4' />
+                        ) : (
+                          <ChevronRight className='size-4' />
+                        )}
+                        <h3 className='text-xs font-medium tracking-wider uppercase'>
+                          Recently Bought ({filterItems(cat.id, true).length})
+                        </h3>
+                      </button>
+                      {boughtExpanded && (
+                        <div className='opacity-80 transition-opacity hover:opacity-100'>
+                          {renderList(cat.id, true)}
+                        </div>
+                      )}
+                    </section>
+                  </TabsContent>
+                ))}
+              </Tabs>
             </div>
           </div>
-        </aside>
+        </TabsContent>
 
-        {/* Content Panel */}
-        <div className='flex-1 space-y-10'>
-          <Tabs defaultValue='Groceries' className='w-full'>
-            <TabsList className='bg-muted/40 mb-6 p-1'>
-              {categories.map((cat) => (
-                <TabsTrigger key={cat.id} value={cat.id} className='gap-2 px-6'>
-                  <cat.icon className='size-4' />
-                  {cat.id}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {categories.map((cat) => (
-              <TabsContent
-                key={cat.id}
-                value={cat.id}
-                className='space-y-10 focus-visible:outline-none'
-              >
-                {/* To Buy Section */}
-                <section className='space-y-6'>
-                  <button
-                    onClick={() => setToBuyExpanded(!toBuyExpanded)}
-                    className='text-muted-foreground/70 hover:text-foreground flex h-8 items-center gap-2 px-1 transition-colors'
-                  >
-                    {toBuyExpanded ? (
-                      <ChevronDown className='size-4' />
-                    ) : (
-                      <ChevronRight className='size-4' />
-                    )}
-                    <h3 className='text-xs font-medium tracking-wider uppercase'>
-                      To Buy ({filterItems(cat.id, false).length})
-                    </h3>
-                  </button>
-
-                  {toBuyExpanded && renderList(cat.id, false)}
-                </section>
-
-                <Separator className='my-2' />
-
-                {/* Bought Section */}
-                <section className='space-y-6'>
-                  <button
-                    onClick={() => setBoughtExpanded(!boughtExpanded)}
-                    className='text-muted-foreground/50 hover:text-foreground flex h-8 items-center gap-2 px-1 transition-colors'
-                  >
-                    {boughtExpanded ? (
-                      <ChevronDown className='size-4' />
-                    ) : (
-                      <ChevronRight className='size-4' />
-                    )}
-                    <h3 className='text-xs font-medium tracking-wider uppercase'>
-                      Recently Bought ({filterItems(cat.id, true).length})
-                    </h3>
-                  </button>
-
-                  {boughtExpanded && (
-                    <div className='opacity-80 transition-opacity hover:opacity-100'>
-                      {renderList(cat.id, true)}
-                    </div>
-                  )}
-                </section>
-              </TabsContent>
-            ))}
-          </Tabs>
-        </div>
-      </div>
+        {/* Inventory tab */}
+        <TabsContent value='inventory' className='mt-6 focus-visible:outline-none'>
+          <InventoryView purchases={purchases} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
