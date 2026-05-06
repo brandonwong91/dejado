@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { format, differenceInCalendarDays } from 'date-fns';
 import {
@@ -11,8 +13,13 @@ import {
   AlertCircleIcon,
   ClockIcon,
   CheckCircle2Icon,
-  MinusCircleIcon
+  MinusCircleIcon,
+  Trash2Icon,
+  Edit2Icon
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { deletePurchaseAction } from '../actions';
+import { PurchaseDialog } from './purchase-dialog';
 
 interface Purchase {
   id: string;
@@ -72,12 +79,11 @@ function StatusBadge({ status }: { status: RepurchaseStatus }) {
 }
 
 function RepurchaseLabel({ purchase }: { purchase: Purchase }) {
-  if (!purchase.dueDate) {
+  if (!purchase.dueDate)
     return <span className='text-muted-foreground text-xs'>—</span>;
-  }
+
   const days = differenceInCalendarDays(purchase.dueDate, new Date());
   const dateStr = format(purchase.dueDate, 'MMM d, yyyy');
-
   let relative: string;
   if (days === 0) relative = 'Today';
   else if (days < 0) relative = `${Math.abs(days)}d overdue`;
@@ -110,6 +116,195 @@ const statusOrder: Record<RepurchaseStatus, number> = {
   stocked: 3
 };
 
+function InventoryItem({ item }: { item: Purchase }) {
+  const status = getStatus(item);
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`Delete "${item.name}"?`)) return;
+    try {
+      await deletePurchaseAction(item.id);
+      toast.success('Item deleted');
+    } catch {
+      toast.error('Failed to delete item');
+    }
+  }
+
+  const actionButtons = (
+    <div
+      className='flex shrink-0 items-center gap-1'
+      onClick={(e) => e.stopPropagation()}
+    >
+      <PurchaseDialog
+        initialData={item}
+        trigger={
+          <Button
+            variant='ghost'
+            size='icon'
+            className='size-8 text-muted-foreground hover:text-foreground'
+            title='Edit item'
+          >
+            <Edit2Icon className='size-3.5' />
+          </Button>
+        }
+      />
+      <Button
+        variant='ghost'
+        size='icon'
+        className='size-8 text-muted-foreground hover:text-destructive'
+        title='Delete item'
+        onClick={handleDelete}
+      >
+        <Trash2Icon className='size-3.5' />
+      </Button>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Mobile card (hidden on sm+) */}
+      <div
+        className={cn(
+          'flex flex-col gap-3 px-4 py-3 transition-colors sm:hidden',
+          status === 'overdue' && 'bg-red-50/50 dark:bg-red-950/10',
+          status === 'soon' && 'bg-amber-50/50 dark:bg-amber-950/10'
+        )}
+      >
+        <div className='flex items-start justify-between gap-2'>
+          <div className='flex min-w-0 flex-col gap-1'>
+            <div className='flex flex-wrap items-center gap-1.5'>
+              <span
+                className={cn(
+                  'truncate font-semibold',
+                  status === 'overdue' && 'text-red-700 dark:text-red-400'
+                )}
+              >
+                {item.name}
+              </span>
+              {item.tag && (
+                <Badge
+                  variant='secondary'
+                  className='h-4 px-1 text-[9px] font-bold tracking-wider uppercase'
+                >
+                  {item.tag}
+                </Badge>
+              )}
+            </div>
+            {item.isBought === 'true' && item.lastBoughtAt && (
+              <span className='text-muted-foreground text-[10px]'>
+                Last bought {format(item.lastBoughtAt, 'MMM d')}
+              </span>
+            )}
+          </div>
+          <div className='flex shrink-0 items-center gap-1.5'>
+            <StatusBadge status={status} />
+            {actionButtons}
+          </div>
+        </div>
+
+        <div className='text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs'>
+          {item.quantity && (
+            <span className='font-mono font-semibold text-foreground'>
+              {item.quantity}
+            </span>
+          )}
+          {item.frequency && (
+            <div className='flex items-center gap-1'>
+              <RepeatIcon className='size-3' />
+              <span>Every {item.frequency}d</span>
+            </div>
+          )}
+          {item.dueDate && (
+            <div className='flex items-center gap-1'>
+              <CalendarIcon className='size-3' />
+              <span
+                className={cn(
+                  differenceInCalendarDays(item.dueDate, new Date()) < 0 &&
+                    'font-medium text-red-600 dark:text-red-400',
+                  differenceInCalendarDays(item.dueDate, new Date()) >= 0 &&
+                    differenceInCalendarDays(item.dueDate, new Date()) <= 3 &&
+                    'font-medium text-amber-600 dark:text-amber-400'
+                )}
+              >
+                {format(item.dueDate, 'MMM d, yyyy')} ·{' '}
+                {differenceInCalendarDays(item.dueDate, new Date()) === 0
+                  ? 'Today'
+                  : differenceInCalendarDays(item.dueDate, new Date()) < 0
+                    ? `${Math.abs(differenceInCalendarDays(item.dueDate, new Date()))}d overdue`
+                    : `in ${differenceInCalendarDays(item.dueDate, new Date())}d`}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Desktop row (hidden on mobile) */}
+      <div
+        className={cn(
+          'group hidden cursor-pointer grid-cols-[1fr_72px_110px_130px_110px_72px] items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/40 sm:grid',
+          status === 'overdue' && 'bg-red-50/50 dark:bg-red-950/10',
+          status === 'soon' && 'bg-amber-50/50 dark:bg-amber-950/10'
+        )}
+      >
+        {/* Name + tag */}
+        <div className='flex min-w-0 flex-col gap-0.5'>
+          <div className='flex items-center gap-2'>
+            <span
+              className={cn(
+                'truncate font-medium',
+                status === 'overdue' && 'text-red-700 dark:text-red-400'
+              )}
+            >
+              {item.name}
+            </span>
+            {item.tag && (
+              <Badge
+                variant='secondary'
+                className='h-4 shrink-0 px-1 text-[9px] font-bold tracking-wider uppercase'
+              >
+                {item.tag}
+              </Badge>
+            )}
+          </div>
+          {item.isBought === 'true' && item.lastBoughtAt && (
+            <span className='text-muted-foreground text-[10px]'>
+              Last bought {format(item.lastBoughtAt, 'MMM d')}
+            </span>
+          )}
+        </div>
+
+        {/* Quantity */}
+        <span className='font-mono text-sm font-semibold'>
+          {item.quantity ?? '—'}
+        </span>
+
+        {/* Frequency */}
+        <div>
+          {item.frequency ? (
+            <div className='text-muted-foreground flex items-center gap-1.5 text-xs'>
+              <RepeatIcon className='size-3 shrink-0' />
+              <span>Every {item.frequency}d</span>
+            </div>
+          ) : (
+            <span className='text-muted-foreground text-xs'>—</span>
+          )}
+        </div>
+
+        {/* Next repurchase */}
+        <RepurchaseLabel purchase={item} />
+
+        {/* Status */}
+        <StatusBadge status={status} />
+
+        {/* Actions — visible on row hover */}
+        <div className='flex justify-end opacity-0 transition-opacity group-hover:opacity-100'>
+          {actionButtons}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function CategorySection({
   title,
   icon: Icon,
@@ -133,7 +328,7 @@ function CategorySection({
 
   return (
     <section className='space-y-3'>
-      <div className='flex items-center gap-2 px-1'>
+      <div className='flex flex-wrap items-center gap-2 px-1'>
         <Icon className='text-muted-foreground size-4' />
         <h3 className='text-sm font-semibold'>{title}</h3>
         <span className='text-muted-foreground text-xs'>
@@ -151,85 +346,23 @@ function CategorySection({
         )}
       </div>
 
-      <div className='rounded-xl border'>
-        {/* Header row */}
-        <div className='text-muted-foreground border-b px-4 py-2 text-[10px] font-semibold tracking-wider uppercase'>
-          <div className='grid grid-cols-[1fr_80px_120px_110px_100px] gap-4'>
+      <div className='rounded-xl border overflow-hidden'>
+        {/* Desktop header row */}
+        <div className='text-muted-foreground hidden border-b bg-muted/20 px-4 py-2 text-[10px] font-semibold tracking-wider uppercase sm:block'>
+          <div className='grid grid-cols-[1fr_72px_110px_130px_110px_72px] gap-3'>
             <span>Item</span>
             <span>Qty</span>
             <span>Frequency</span>
             <span>Next Repurchase</span>
-            <span className='text-right'>Status</span>
+            <span>Status</span>
+            <span />
           </div>
         </div>
 
         <div className='divide-y'>
-          {sorted.map((item) => {
-            const status = getStatus(item);
-            return (
-              <div
-                key={item.id}
-                className={cn(
-                  'grid grid-cols-[1fr_80px_120px_110px_100px] items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-muted/30',
-                  status === 'overdue' && 'bg-red-50/50 dark:bg-red-950/10',
-                  status === 'soon' && 'bg-amber-50/50 dark:bg-amber-950/10'
-                )}
-              >
-                {/* Name + tag */}
-                <div className='flex min-w-0 flex-col gap-0.5'>
-                  <div className='flex items-center gap-2'>
-                    <span
-                      className={cn(
-                        'truncate font-medium',
-                        status === 'overdue' &&
-                          'text-red-700 dark:text-red-400'
-                      )}
-                    >
-                      {item.name}
-                    </span>
-                    {item.tag && (
-                      <Badge
-                        variant='secondary'
-                        className='h-4 shrink-0 px-1 text-[9px] font-bold tracking-wider uppercase'
-                      >
-                        {item.tag}
-                      </Badge>
-                    )}
-                  </div>
-                  {item.isBought === 'true' && item.lastBoughtAt && (
-                    <span className='text-muted-foreground text-[10px]'>
-                      Last bought {format(item.lastBoughtAt, 'MMM d')}
-                    </span>
-                  )}
-                </div>
-
-                {/* Quantity */}
-                <span className='font-mono text-sm font-semibold'>
-                  {item.quantity ?? '—'}
-                </span>
-
-                {/* Frequency */}
-                <div>
-                  {item.frequency ? (
-                    <div className='text-muted-foreground flex items-center gap-1.5 text-xs'>
-                      <RepeatIcon className='size-3 shrink-0' />
-                      <span>Every {item.frequency}d</span>
-                    </div>
-                  ) : (
-                    <span className='text-muted-foreground text-xs'>—</span>
-                  )}
-                </div>
-
-                {/* Next repurchase */}
-                <RepurchaseLabel purchase={item} />
-
-                {/* Status */}
-                <div className='flex justify-end'>
-                  <StatusBadge status={status} />
-                </div>
-              </div>
-            );
-          })}
+          {sorted.map((item) => (
+            <InventoryItem key={item.id} item={item} />
+          ))}
         </div>
       </div>
     </section>
