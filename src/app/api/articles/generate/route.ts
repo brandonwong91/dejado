@@ -1,6 +1,7 @@
 import {
   generateArticleAction,
-  getGlobalTrendingTopicsAction
+  getGlobalTrendingTopicsAction,
+  refreshTierRankingsAction
 } from '@/features/articles/actions';
 import { generateDailySummariesAction } from '@/features/notifications/actions/daily-summary';
 import { db } from '@/db';
@@ -40,6 +41,11 @@ export async function GET(request: Request) {
     // Fire-and-forget — never blocks or fails the article response.
     generateDailySummariesAction().catch((err) =>
       console.error('Daily summary generation failed:', err)
+    );
+
+    // Refresh tier ranking articles in the background — checks if each ranked list is still current.
+    refreshTierRankingsAction().catch((err) =>
+      console.error('Tier rankings refresh failed:', err)
     );
 
     return NextResponse.json({
