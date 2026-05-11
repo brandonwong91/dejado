@@ -26,13 +26,17 @@ import {
   LockIcon,
   XIcon,
   ServerIcon,
-  ShuffleIcon
+  ShuffleIcon,
+  TrophyIcon,
+  RefreshCwIcon,
+  CheckCircle2Icon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUser } from '@clerk/nextjs';
 import {
   generateArticleAction,
   generateSystemDesignAction,
+  generateTierRankingAction,
   deleteArticleAction,
   getArticlesAction,
   toggleArticlePublicAction,
@@ -68,6 +72,13 @@ const SUGGESTED_TOPICS = [
   'Neuroscience'
 ];
 
+const TIER_RANKING_EXAMPLES = [
+  'Best 5 phones with longest battery life',
+  'Best 5 budget foods under SGD 15 in Suntec City',
+  'Top 5 free productivity apps for remote workers',
+  'Best 5 programming languages to learn in 2025'
+];
+
 interface Article {
   id: string;
   title: string;
@@ -77,6 +88,9 @@ interface Article {
   imageUrl: string | null;
   isPublic: string;
   userId: string | null;
+  seriesType: string | null;
+  tierQuery: string | null;
+  lastValidatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -119,6 +133,8 @@ export function ArticlesView({
   const [isGeneratingSystemDesign, setIsGeneratingSystemDesign] =
     useState(false);
   const systemDesignSystems = SYSTEM_DESIGN_SYSTEMS;
+  const [tierQuery, setTierQuery] = useState('');
+  const [isGeneratingTier, setIsGeneratingTier] = useState(false);
 
   useEffect(() => {
     // Skip fetch if we already have trends cached for this user
@@ -255,6 +271,27 @@ export function ArticlesView({
       });
     } finally {
       setIsGeneratingSystemDesign(false);
+    }
+  };
+
+  const handleGenerateTierRanking = async (query?: string) => {
+    const q = query || tierQuery;
+    if (!q.trim()) return;
+    setIsGeneratingTier(true);
+    const toastId = toast.loading(`Building ranked list for "${q}"...`);
+    try {
+      const newArticle = await generateTierRankingAction(q.trim());
+      setArticles((prev) => [newArticle, ...prev]);
+      setTierQuery('');
+      toast.success(`Ranked list "${newArticle.title}" is ready!`, {
+        id: toastId
+      });
+    } catch {
+      toast.error('Failed to generate ranked list. Please try again.', {
+        id: toastId
+      });
+    } finally {
+      setIsGeneratingTier(false);
     }
   };
 
@@ -498,6 +535,79 @@ export function ArticlesView({
         </CardContent>
       </Card>
 
+      {/* Tier Rankings Series */}
+      <Card className='border-primary/10 overflow-hidden border-2 shadow-lg backdrop-blur-sm'>
+        <CardContent className='space-y-5 p-6'>
+          <div className='space-y-1'>
+            <div className='flex items-center gap-2'>
+              <TrophyIcon className='text-primary size-5' />
+              <h3 className='text-lg font-bold'>Tier Rankings</h3>
+            </div>
+            <p className='text-muted-foreground text-sm'>
+              Search for any ranked list — best products, local spots, tools, or
+              anything you want compared. Refreshed daily to stay current.
+            </p>
+          </div>
+
+          <div className='flex flex-col gap-3 sm:flex-row'>
+            <div className='relative flex-1'>
+              <Input
+                placeholder='e.g. "Best 5 phones with longest battery life"'
+                value={tierQuery}
+                onChange={(e) => setTierQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && tierQuery.trim())
+                    handleGenerateTierRanking();
+                }}
+                className='bg-background focus-visible:border-primary/50 h-11 border-2 pl-10 shadow-sm transition-all'
+                disabled={isGeneratingTier}
+              />
+              <SearchIcon className='text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2' />
+            </div>
+            <Button
+              onClick={() => handleGenerateTierRanking()}
+              disabled={isGeneratingTier || !tierQuery.trim()}
+              className='h-11 gap-2 px-6 font-semibold'
+            >
+              {isGeneratingTier ? (
+                <>
+                  <Loader2Icon className='size-4 animate-spin' />
+                  Ranking...
+                </>
+              ) : (
+                <>
+                  <TrophyIcon className='size-4' />
+                  Generate Ranking
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div className='space-y-2'>
+            <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
+              Try these examples
+            </p>
+            <div className='flex flex-wrap gap-2'>
+              {TIER_RANKING_EXAMPLES.map((example) => (
+                <button
+                  key={example}
+                  onClick={() => handleGenerateTierRanking(example)}
+                  disabled={isGeneratingTier}
+                  className='group'
+                >
+                  <Badge
+                    variant='outline'
+                    className='border-primary/30 bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all group-disabled:cursor-not-allowed group-disabled:opacity-50'
+                  >
+                    {example}
+                  </Badge>
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className='space-y-8'>
         <div className='flex items-center gap-4'>
           <div className='bg-border h-px flex-1' />
@@ -543,6 +653,34 @@ export function ArticlesView({
                     >
                       {article.topic || 'Trending'}
                     </Badge>
+                    {article.seriesType === 'tier' &&
+                      article.lastValidatedAt &&
+                      (() => {
+                        const hoursSinceValidation =
+                          (Date.now() -
+                            new Date(article.lastValidatedAt).getTime()) /
+                          (1000 * 60 * 60);
+                        return hoursSinceValidation < 24 ? (
+                          <Badge
+                            variant='outline'
+                            className='gap-1 border-emerald-500/50 px-2 py-0.5 text-[9px] tracking-widest text-emerald-600 uppercase dark:text-emerald-400'
+                          >
+                            <CheckCircle2Icon className='size-2.5' />
+                            Updated
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant='outline'
+                            className='gap-1 border-slate-400/50 px-2 py-0.5 text-[9px] tracking-widest text-slate-500 uppercase dark:text-slate-400'
+                          >
+                            <RefreshCwIcon className='size-2.5' />
+                            {formatDistanceToNow(
+                              new Date(article.lastValidatedAt),
+                              { addSuffix: true }
+                            )}
+                          </Badge>
+                        );
+                      })()}
                     {article.isPublic === 'false' && (
                       <Badge
                         variant='outline'

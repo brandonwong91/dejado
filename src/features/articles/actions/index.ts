@@ -3,7 +3,7 @@
 import { db } from '@/db';
 import { articles, listItems, interests } from '@/db/schema';
 import { revalidatePath } from 'next/cache';
-import { eq, desc, sql, and, or } from 'drizzle-orm';
+import { eq, desc, sql, and, or, isNotNull } from 'drizzle-orm';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { SYSTEM_DESIGN_SYSTEMS } from '../constants';
 
@@ -377,6 +377,157 @@ Be technical and specific. Include real-world scale numbers throughout.`;
 
   revalidatePath('/articles');
   return newArticle;
+}
+
+export async function generateTierRankingAction(query: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const today = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  const prompt = `Create a comprehensive ranked list article for: "${query}".
+
+Return ONLY a raw JSON object (no markdown code blocks) with: "title", "summary", "content".
+
+Rules:
+- "title": a clear descriptive title including the count and category, e.g. "Best 5 Phones with Longest Battery Life (${new Date().getFullYear()})"
+- "summary": one punchy sentence describing the ranking scope and what makes it useful
+- "content": rich Markdown with exactly these sections:
+
+## Ranking Criteria
+Brief 2-3 sentence explanation of how items are evaluated and ranked.
+
+## The Rankings
+Numbered list from 1 (best) to N. For each item include:
+- **Item Name** — key specs/details relevant to the query
+- Why it ranks here (1-2 sentences)
+- A brief note on any caveats or who it's best for
+
+## Quick Comparison
+A markdown table comparing the key attributes across all items.
+
+## Bottom Line
+1-2 sentences on the top pick and who should choose what.
+
+*Last verified: ${today}*
+
+Be specific, factual, and use real products/places/items. Include relevant details like prices, availability, or location-specific context where applicable.`;
+
+  const rawResponse = await callPollinations(prompt, true);
+
+  let data: any;
+  try {
+    data = JSON.parse(rawResponse.replace(/```json|```/g, '').trim());
+  } catch {
+    data = {
+      title: query,
+      summary: `Ranked list: ${query}`,
+      content: rawResponse
+    };
+  }
+
+  const now = new Date();
+  const [newArticle] = await db
+    .insert(articles)
+    .values({
+      title: data.title || query,
+      summary: data.summary || `Ranked list: ${query}`,
+      content: data.content || rawResponse,
+      topic: 'Tier Rankings',
+      seriesType: 'tier',
+      tierQuery: query,
+      isPublic: 'true',
+      userId: userId || 'system',
+      lastValidatedAt: now
+    })
+    .returning();
+
+  revalidatePath('/articles');
+  return newArticle;
+}
+
+export async function refreshTierRankingsAction() {
+  const tierArticles = await db
+    .select()
+    .from(articles)
+    .where(and(eq(articles.seriesType, 'tier'), isNotNull(articles.tierQuery)));
+
+  const results: Array<{
+    id: string;
+    tierQuery: string | null;
+    isStillValid: boolean;
+  }> = [];
+
+  for (const article of tierArticles) {
+    try {
+      const today = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      const validationPrompt = `Today is ${today}.
+
+I have a ranked list article for the query: "${article.tierQuery}"
+
+Current article content (first 2000 chars):
+${article.content.substring(0, 2000)}
+
+Is this ranked list still accurate and up-to-date? Consider:
+- Are the items/places/products still available and relevant?
+- Have there been significant changes (new releases, closures, price changes) that would affect rankings?
+- Should any items be replaced or reordered?
+
+Return ONLY a raw JSON object (no markdown code blocks):
+{
+  "isStillValid": boolean,
+  "updatedContent": string
+}
+
+Rules:
+- If still valid: set isStillValid to true, return the same content but update the "Last verified" date to ${today}
+- If outdated: set isStillValid to false, return fully revised content with updated rankings and new "Last verified: ${today}" date
+- Always preserve the same markdown structure (Ranking Criteria, The Rankings, Quick Comparison, Bottom Line sections)`;
+
+      const rawResponse = await callPollinations(validationPrompt, true);
+
+      let validationData: { isStillValid: boolean; updatedContent: string };
+      try {
+        validationData = JSON.parse(
+          rawResponse.replace(/```json|```/g, '').trim()
+        );
+      } catch {
+        validationData = {
+          isStillValid: true,
+          updatedContent: article.content
+        };
+      }
+
+      const now = new Date();
+      await db
+        .update(articles)
+        .set({
+          content: validationData.updatedContent || article.content,
+          lastValidatedAt: now,
+          updatedAt: now
+        })
+        .where(eq(articles.id, article.id));
+
+      results.push({
+        id: article.id,
+        tierQuery: article.tierQuery,
+        isStillValid: validationData.isStillValid
+      });
+    } catch (err) {
+      console.error(`Failed to refresh tier article ${article.id}:`, err);
+    }
+  }
+
+  return results;
 }
 
 export async function getGlobalTrendingTopicsAction() {

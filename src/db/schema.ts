@@ -150,6 +150,9 @@ export const articles = pgTable('articles', {
   imageUrl: text('image_url'),
   isPublic: text('is_public').default('true').notNull(),
   userId: text('user_id'), // Optional: could be "system" or a specific user
+  seriesType: text('series_type'), // 'tier' | null
+  tierQuery: text('tier_query'), // Original search query for tier ranking articles
+  lastValidatedAt: timestamp('last_validated_at'), // When tier list was last validated as current
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });

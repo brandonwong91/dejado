@@ -15,6 +15,13 @@
       "when": 1775756828994,
       "tag": "0001_nebulous_invaders",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778225196698,
+      "tag": "0002_hard_satana",
+      "breakpoints": true
     }
   ]
 }

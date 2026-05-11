@@ -11,8 +11,12 @@ import {
   GlobeIcon,
   LockIcon,
   BookOpenIcon,
-  SparklesIcon
+  SparklesIcon,
+  TrophyIcon,
+  CheckCircle2Icon,
+  RefreshCwIcon
 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { toggleArticlePublicAction } from '../actions';
 import Link from 'next/link';
@@ -28,7 +32,11 @@ interface Article {
   imageUrl: string | null;
   isPublic: string;
   userId: string | null;
+  seriesType: string | null;
+  tierQuery: string | null;
+  lastValidatedAt: Date | null;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 interface ArticleDetailsViewProps {
@@ -306,10 +314,37 @@ export function ArticleDetailsView({
         <div className='flex flex-wrap items-center justify-center gap-3'>
           <Badge
             variant='secondary'
-            className='bg-primary/10 text-primary hover:bg-primary/20 max-w-[calc(100vw-3rem)] whitespace-normal break-words px-3 py-1 text-center text-[10px] tracking-wider uppercase transition-colors'
+            className='bg-primary/10 text-primary hover:bg-primary/20 max-w-[calc(100vw-3rem)] px-3 py-1 text-center text-[10px] tracking-wider break-words whitespace-normal uppercase transition-colors'
           >
             {article.topic || 'Trending Insight'}
           </Badge>
+          {article.seriesType === 'tier' &&
+            article.lastValidatedAt &&
+            (() => {
+              const hoursSinceValidation =
+                (Date.now() - new Date(article.lastValidatedAt).getTime()) /
+                (1000 * 60 * 60);
+              return hoursSinceValidation < 24 ? (
+                <Badge
+                  variant='outline'
+                  className='gap-1 border-emerald-500/50 px-3 py-1 text-[10px] tracking-wider text-emerald-600 uppercase dark:text-emerald-400'
+                >
+                  <CheckCircle2Icon className='size-3' />
+                  List updated today
+                </Badge>
+              ) : (
+                <Badge
+                  variant='outline'
+                  className='gap-1 border-slate-400/50 px-3 py-1 text-[10px] tracking-wider text-slate-500 uppercase dark:text-slate-400'
+                >
+                  <RefreshCwIcon className='size-3' />
+                  Last checked{' '}
+                  {formatDistanceToNow(new Date(article.lastValidatedAt), {
+                    addSuffix: true
+                  })}
+                </Badge>
+              );
+            })()}
           <div className='text-muted-foreground flex items-center gap-1.5 text-xs font-medium'>
             <ClockIcon className='size-3.5' /> 2 min read
           </div>
@@ -317,6 +352,14 @@ export function ArticleDetailsView({
         <h1 className='text-2xl leading-tight font-extrabold tracking-tight text-balance sm:text-4xl md:text-5xl lg:text-6xl'>
           {article.title}
         </h1>
+        {article.seriesType === 'tier' && article.tierQuery && (
+          <div className='bg-muted/40 mx-auto flex max-w-xl items-center gap-2 rounded-full px-4 py-2 text-sm'>
+            <TrophyIcon className='text-primary size-4 shrink-0' />
+            <span className='text-muted-foreground italic'>
+              &ldquo;{article.tierQuery}&rdquo;
+            </span>
+          </div>
+        )}
         <div className='text-muted-foreground flex flex-wrap items-center justify-center gap-4 pt-4 text-sm font-medium'>
           <div className='flex items-center gap-2'>
             <div className='bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-full font-bold shadow-sm'>
@@ -329,6 +372,15 @@ export function ArticleDetailsView({
             <CalendarIcon className='size-4' />
             {format(article.createdAt, 'MMMM d, yyyy')}
           </div>
+          {article.seriesType === 'tier' && (
+            <>
+              <span className='opacity-30'>|</span>
+              <div className='flex items-center gap-1.5'>
+                <RefreshCwIcon className='size-4' />
+                Content last updated {format(article.updatedAt, 'MMMM d, yyyy')}
+              </div>
+            </>
+          )}
         </div>
       </header>
 
