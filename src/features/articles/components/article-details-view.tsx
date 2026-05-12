@@ -189,73 +189,161 @@ export function ArticleDetailsView({
         );
       }
 
-      // Plain text lines
+      // Plain text lines — group consecutive table rows before rendering
+      type LineGroup =
+        | { type: 'table'; rows: string[][] }
+        | { type: 'normal'; lines: string[] };
+
+      const groups: LineGroup[] = [];
+      let gi = 0;
+      while (gi < seg.lines.length) {
+        const trimmed = seg.lines[gi].trim();
+        if (trimmed.startsWith('|')) {
+          const tableLines: string[] = [];
+          while (
+            gi < seg.lines.length &&
+            seg.lines[gi].trim().startsWith('|')
+          ) {
+            tableLines.push(seg.lines[gi]);
+            gi++;
+          }
+          const rows = tableLines
+            .filter((row) => !/^\s*\|[\s\-:|]+\|\s*$/.test(row))
+            .map((row) =>
+              row
+                .trim()
+                .replace(/^\||\|$/g, '')
+                .split('|')
+                .map((cell) => cell.trim())
+            );
+          if (rows.length > 0) groups.push({ type: 'table', rows });
+        } else {
+          const normalLines: string[] = [];
+          while (
+            gi < seg.lines.length &&
+            !seg.lines[gi].trim().startsWith('|')
+          ) {
+            normalLines.push(seg.lines[gi]);
+            gi++;
+          }
+          groups.push({ type: 'normal', lines: normalLines });
+        }
+      }
+
       return (
         <div key={si}>
-          {seg.lines.map((line, li) => {
-            const t = line.trim();
-            if (t.startsWith('# '))
+          {groups.map((group, gi) => {
+            if (group.type === 'table') {
+              const [headerRow, ...bodyRows] = group.rows;
               return (
-                <h1
-                  key={li}
-                  className='text-foreground mt-10 mb-6 text-3xl font-bold'
+                <div
+                  key={gi}
+                  className='my-6 overflow-x-auto rounded-xl border'
                 >
-                  {processInline(t.slice(2), li)}
-                </h1>
+                  <table className='w-full text-sm'>
+                    <thead className='bg-muted/50'>
+                      <tr>
+                        {headerRow.map((cell, ci) => (
+                          <th
+                            key={ci}
+                            className='text-foreground border-b px-4 py-3 text-left font-semibold whitespace-nowrap'
+                          >
+                            {processInline(cell, ci)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bodyRows.map((row, ri) => (
+                        <tr
+                          key={ri}
+                          className='hover:bg-muted/30 even:bg-muted/10 transition-colors'
+                        >
+                          {row.map((cell, ci) => (
+                            <td
+                              key={ci}
+                              className='text-muted-foreground border-b px-4 py-3 leading-relaxed last:border-b-0'
+                            >
+                              {processInline(cell, ci)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               );
-            if (t.startsWith('## '))
-              return (
-                <h2
-                  key={li}
-                  className='text-foreground/90 mt-8 mb-4 text-2xl font-bold'
-                >
-                  {processInline(t.slice(3), li)}
-                </h2>
-              );
-            if (t.startsWith('### '))
-              return (
-                <h3
-                  key={li}
-                  className='text-foreground/80 mt-6 mb-3 text-xl font-bold'
-                >
-                  {processInline(t.slice(4), li)}
-                </h3>
-              );
-            if (t === '') return <div key={li} className='h-4' />;
-            if (t.startsWith('- ') || t.startsWith('* '))
-              return (
-                <li
-                  key={li}
-                  className='text-muted-foreground mb-3 ml-6 list-disc pl-2 leading-relaxed md:text-lg'
-                >
-                  {processInline(t.slice(2), li)}
-                </li>
-              );
-            if (/^\d+\.\s/.test(t))
-              return (
-                <li
-                  key={li}
-                  className='text-muted-foreground mb-3 ml-6 list-decimal pl-2 leading-relaxed md:text-lg'
-                >
-                  {processInline(t.replace(/^\d+\.\s/, ''), li)}
-                </li>
-              );
-            if (t.startsWith('> '))
-              return (
-                <blockquote
-                  key={li}
-                  className='border-primary/40 text-muted-foreground my-4 border-l-4 pl-4 italic'
-                >
-                  {processInline(t.slice(2), li)}
-                </blockquote>
-              );
+            }
+
             return (
-              <p
-                key={li}
-                className='text-muted-foreground mb-6 leading-relaxed md:text-lg'
-              >
-                {processInline(line, li)}
-              </p>
+              <div key={gi}>
+                {group.lines.map((line, li) => {
+                  const t = line.trim();
+                  if (t.startsWith('# '))
+                    return (
+                      <h1
+                        key={li}
+                        className='text-foreground mt-10 mb-6 text-3xl font-bold'
+                      >
+                        {processInline(t.slice(2), li)}
+                      </h1>
+                    );
+                  if (t.startsWith('## '))
+                    return (
+                      <h2
+                        key={li}
+                        className='text-foreground/90 mt-8 mb-4 text-2xl font-bold'
+                      >
+                        {processInline(t.slice(3), li)}
+                      </h2>
+                    );
+                  if (t.startsWith('### '))
+                    return (
+                      <h3
+                        key={li}
+                        className='text-foreground/80 mt-6 mb-3 text-xl font-bold'
+                      >
+                        {processInline(t.slice(4), li)}
+                      </h3>
+                    );
+                  if (t === '') return <div key={li} className='h-4' />;
+                  if (t.startsWith('- ') || t.startsWith('* '))
+                    return (
+                      <li
+                        key={li}
+                        className='text-muted-foreground mb-3 ml-6 list-disc pl-2 leading-relaxed md:text-lg'
+                      >
+                        {processInline(t.slice(2), li)}
+                      </li>
+                    );
+                  if (/^\d+\.\s/.test(t))
+                    return (
+                      <li
+                        key={li}
+                        className='text-muted-foreground mb-3 ml-6 list-decimal pl-2 leading-relaxed md:text-lg'
+                      >
+                        {processInline(t.replace(/^\d+\.\s/, ''), li)}
+                      </li>
+                    );
+                  if (t.startsWith('> '))
+                    return (
+                      <blockquote
+                        key={li}
+                        className='border-primary/40 text-muted-foreground my-4 border-l-4 pl-4 italic'
+                      >
+                        {processInline(t.slice(2), li)}
+                      </blockquote>
+                    );
+                  return (
+                    <p
+                      key={li}
+                      className='text-muted-foreground mb-6 leading-relaxed md:text-lg'
+                    >
+                      {processInline(line, li)}
+                    </p>
+                  );
+                })}
+              </div>
             );
           })}
         </div>
