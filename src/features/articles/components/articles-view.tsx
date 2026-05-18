@@ -29,7 +29,10 @@ import {
   ShuffleIcon,
   TrophyIcon,
   RefreshCwIcon,
-  CheckCircle2Icon
+  CheckCircle2Icon,
+  CalendarIcon,
+  ChevronDownIcon,
+  ChevronUpIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUser } from '@clerk/nextjs';
@@ -135,6 +138,17 @@ export function ArticlesView({
   const systemDesignSystems = SYSTEM_DESIGN_SYSTEMS;
   const [tierQuery, setTierQuery] = useState('');
   const [isGeneratingTier, setIsGeneratingTier] = useState(false);
+  const [showTodayPanel, setShowTodayPanel] = useState(true);
+
+  const todaysArticles = articles.filter((a) => {
+    const articleDate = new Date(a.createdAt);
+    const now = new Date();
+    return (
+      articleDate.getFullYear() === now.getFullYear() &&
+      articleDate.getMonth() === now.getMonth() &&
+      articleDate.getDate() === now.getDate()
+    );
+  });
 
   useEffect(() => {
     // Skip fetch if we already have trends cached for this user
@@ -606,6 +620,151 @@ export function ArticlesView({
             </div>
           </div>
         </CardContent>
+      </Card>
+
+      {/* Today's Content Management */}
+      <Card className='border-primary/10 overflow-hidden border-2 shadow-lg backdrop-blur-sm'>
+        <CardHeader className='pb-3'>
+          <div className='flex items-center justify-between'>
+            <div className='flex items-center gap-2'>
+              <CalendarIcon className='text-primary size-5' />
+              <CardTitle className='text-lg'>
+                Today&apos;s Content
+                {todaysArticles.length > 0 && (
+                  <span className='text-muted-foreground ml-2 text-sm font-normal'>
+                    {todaysArticles.length} article
+                    {todaysArticles.length !== 1 ? 's' : ''} generated
+                  </span>
+                )}
+              </CardTitle>
+            </div>
+            <Button
+              variant='ghost'
+              size='sm'
+              className='text-muted-foreground h-8 w-8 p-0'
+              onClick={() => setShowTodayPanel((v) => !v)}
+            >
+              {showTodayPanel ? (
+                <ChevronUpIcon className='size-4' />
+              ) : (
+                <ChevronDownIcon className='size-4' />
+              )}
+            </Button>
+          </div>
+          <p className='text-muted-foreground text-sm'>
+            Manage the articles generated today — toggle visibility or remove
+            content from your daily feed.
+          </p>
+        </CardHeader>
+
+        {showTodayPanel && (
+          <CardContent className='pt-0'>
+            {todaysArticles.length === 0 ? (
+              <div className='text-muted-foreground py-6 text-center text-sm italic'>
+                No articles generated yet today. Use any panel above to create
+                content.
+              </div>
+            ) : (
+              <div className='divide-y'>
+                {todaysArticles.map((article) => (
+                  <div
+                    key={article.id}
+                    className='flex items-center gap-3 py-3 first:pt-0 last:pb-0'
+                  >
+                    <div className='min-w-0 flex-1'>
+                      <Link
+                        href={`/articles/${article.id}`}
+                        className='hover:text-primary line-clamp-1 text-sm font-medium transition-colors'
+                      >
+                        {article.title}
+                      </Link>
+                      <div className='mt-1 flex flex-wrap items-center gap-2'>
+                        {article.topic && (
+                          <Badge
+                            variant='secondary'
+                            className='bg-primary/10 text-primary px-2 py-0 text-[9px] tracking-wider uppercase'
+                          >
+                            {article.topic}
+                          </Badge>
+                        )}
+                        {article.seriesType === 'tier' && (
+                          <Badge
+                            variant='outline'
+                            className='gap-1 px-2 py-0 text-[9px] tracking-wider uppercase'
+                          >
+                            <TrophyIcon className='size-2.5' /> Tier
+                          </Badge>
+                        )}
+                        <span className='text-muted-foreground text-[10px]'>
+                          {formatDistanceToNow(article.createdAt, {
+                            addSuffix: true
+                          })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className='flex shrink-0 items-center gap-1'>
+                      {article.userId === user?.id && (
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          className={`h-7 w-7 ${article.isPublic === 'true' ? 'text-primary' : 'text-muted-foreground'}`}
+                          onClick={() =>
+                            handleTogglePublic(
+                              article.id,
+                              article.isPublic === 'false'
+                            )
+                          }
+                          title={
+                            article.isPublic === 'true'
+                              ? 'Make Private'
+                              : 'Publish'
+                          }
+                        >
+                          {article.isPublic === 'true' ? (
+                            <GlobeIcon className='size-3.5' />
+                          ) : (
+                            <LockIcon className='size-3.5' />
+                          )}
+                        </Button>
+                      )}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='text-muted-foreground hover:text-destructive h-7 w-7'
+                            title='Delete'
+                          >
+                            <Trash2Icon className='size-3.5' />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete this article?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will permanently
+                              delete the article.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteArticle(article.id)}
+                              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        )}
       </Card>
 
       <div className='space-y-8'>

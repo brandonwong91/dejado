@@ -1,6 +1,9 @@
 import PageContainer from '@/components/layout/page-container';
 import { ArticleDetailsView } from '@/features/articles/components/article-details-view';
-import { getArticleAction } from '@/features/articles/actions';
+import {
+  getArticleAction,
+  getAdjacentArticlesAction
+} from '@/features/articles/actions';
 import { notFound } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import { Button } from '@/components/ui/button';
@@ -28,8 +31,11 @@ export default async function ArticlePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const article = await getArticleAction(id);
-  const { userId } = await auth();
+  const [article, adjacent, { userId }] = await Promise.all([
+    getArticleAction(id),
+    getAdjacentArticlesAction(id),
+    auth()
+  ]);
 
   if (!article) {
     notFound();
@@ -57,7 +63,12 @@ export default async function ArticlePage({
 
   return (
     <PageContainer scrollable>
-      <ArticleDetailsView article={article} isOwner={isOwner} />
+      <ArticleDetailsView
+        article={article}
+        isOwner={isOwner}
+        prevArticle={adjacent.prev}
+        nextArticle={adjacent.next}
+      />
     </PageContainer>
   );
 }

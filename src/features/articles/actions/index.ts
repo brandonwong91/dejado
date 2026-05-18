@@ -3,7 +3,7 @@
 import { db } from '@/db';
 import { articles, listItems, interests } from '@/db/schema';
 import { revalidatePath } from 'next/cache';
-import { eq, desc, sql, and, or, isNotNull } from 'drizzle-orm';
+import { eq, desc, sql, and, or, isNotNull, lt, gt } from 'drizzle-orm';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { SYSTEM_DESIGN_SYSTEMS } from '../constants';
 
@@ -38,6 +38,37 @@ export async function getArticlesAction() {
 export async function getArticleAction(id: string) {
   const [article] = await db.select().from(articles).where(eq(articles.id, id));
   return article;
+}
+
+export async function getAdjacentArticlesAction(id: string) {
+  const { userId } = await auth();
+
+  const [current] = await db
+    .select({ createdAt: articles.createdAt })
+    .from(articles)
+    .where(eq(articles.id, id));
+
+  if (!current) return { prev: null, next: null };
+
+  const accessFilter = userId
+    ? or(eq(articles.isPublic, 'true'), eq(articles.userId, userId))
+    : eq(articles.isPublic, 'true');
+
+  const [prev] = await db
+    .select({ id: articles.id, title: articles.title })
+    .from(articles)
+    .where(and(accessFilter, lt(articles.createdAt, current.createdAt)))
+    .orderBy(desc(articles.createdAt))
+    .limit(1);
+
+  const [next] = await db
+    .select({ id: articles.id, title: articles.title })
+    .from(articles)
+    .where(and(accessFilter, gt(articles.createdAt, current.createdAt)))
+    .orderBy(articles.createdAt)
+    .limit(1);
+
+  return { prev: prev ?? null, next: next ?? null };
 }
 
 async function callPollinations(prompt: string, jsonMode = false, retries = 2) {
