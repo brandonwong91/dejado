@@ -27,6 +27,7 @@ export type DashboardMetrics = {
   payments: {
     totalAmount: number;
     pendingCount: number;
+    byCurrency: Record<string, number>;
   };
   lists: {
     total: number;
@@ -67,6 +68,15 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   const totalPaymentsAmount = userPayments.reduce((acc, curr) => {
     return acc + (parseFloat(curr.amount) || 0);
   }, 0);
+
+  const paymentsByCurrency = userPayments.reduce<Record<string, number>>(
+    (acc, curr) => {
+      const key = curr.currency || 'SGD';
+      acc[key] = (acc[key] || 0) + (parseFloat(curr.amount) || 0);
+      return acc;
+    },
+    {}
+  );
 
   const pendingPaymentsCount = userPayments.filter(
     (p) => p.isPaid === 'false'
@@ -213,7 +223,8 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     },
     payments: {
       totalAmount: totalPaymentsAmount,
-      pendingCount: pendingPaymentsCount
+      pendingCount: pendingPaymentsCount,
+      byCurrency: paymentsByCurrency
     },
     lists: {
       total: totalListsResult?.count || 0,

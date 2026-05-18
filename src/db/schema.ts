@@ -28,6 +28,7 @@ export const payments = pgTable('payments', {
   frequency: text('frequency').notNull(), // e.g. "30" for 30 days
   isPaid: text('is_paid').default('false').notNull(), // boolean-like text
   paidAt: timestamp('paid_at'),
+  previousAmount: text('previous_amount'), // tracks last amount before an edit for % change display
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });

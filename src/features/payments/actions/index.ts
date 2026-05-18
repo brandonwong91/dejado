@@ -38,6 +38,14 @@ export async function updatePaymentAction(id: string, data: PaymentData) {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
+  const [existing] = await db
+    .select({ amount: payments.amount })
+    .from(payments)
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)));
+
+  const previousAmount =
+    existing && existing.amount !== data.amount ? existing.amount : undefined;
+
   await db
     .update(payments)
     .set({
@@ -47,6 +55,7 @@ export async function updatePaymentAction(id: string, data: PaymentData) {
       amount: data.amount,
       tag: data.tag,
       frequency: data.frequency,
+      ...(previousAmount !== undefined ? { previousAmount } : {}),
       updatedAt: new Date()
     })
     .where(eq(payments.id, id));
