@@ -32,6 +32,7 @@ interface Payment {
   frequency: string;
   isPaid: string;
   paidAt: Date | null;
+  previousAmount: string | null;
 }
 
 interface PaymentViewProps {

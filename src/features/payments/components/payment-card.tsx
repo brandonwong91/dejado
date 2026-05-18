@@ -35,6 +35,7 @@ interface PaymentCardProps {
     frequency: string;
     isPaid: string;
     paidAt: Date | null;
+    previousAmount: string | null;
   };
 }
 
@@ -117,8 +118,11 @@ export function PaymentCard({ payment }: PaymentCardProps) {
               <h3
                 className={cn(
                   'truncate text-lg font-semibold',
-                  optimisticIsPaid && 'text-muted-foreground line-through decoration-2',
-                  !optimisticIsPaid && daysDiff <= 0 && 'text-red-600 dark:text-red-400'
+                  optimisticIsPaid &&
+                    'text-muted-foreground line-through decoration-2',
+                  !optimisticIsPaid &&
+                    daysDiff <= 0 &&
+                    'text-red-600 dark:text-red-400'
                 )}
               >
                 {payment.name}
@@ -183,7 +187,9 @@ export function PaymentCard({ payment }: PaymentCardProps) {
               className={cn(
                 'font-mono text-xl font-bold md:text-2xl',
                 optimisticIsPaid && 'text-muted-foreground line-through',
-                !optimisticIsPaid && daysDiff <= 0 && 'text-red-600 dark:text-red-400'
+                !optimisticIsPaid &&
+                  daysDiff <= 0 &&
+                  'text-red-600 dark:text-red-400'
               )}
             >
               {payment.amount}{' '}
@@ -191,6 +197,33 @@ export function PaymentCard({ payment }: PaymentCardProps) {
                 {payment.currency}
               </small>
             </div>
+            {(() => {
+              const prev = parseFloat(payment.previousAmount || '');
+              const curr = parseFloat(payment.amount);
+              if (
+                !payment.previousAmount ||
+                isNaN(prev) ||
+                isNaN(curr) ||
+                prev === curr
+              )
+                return null;
+              const pct = ((curr - prev) / prev) * 100;
+              const increased = pct > 0;
+              return (
+                <div
+                  className={cn(
+                    'mt-0.5 text-right text-[10px] font-semibold tabular-nums',
+                    increased
+                      ? 'text-red-500 dark:text-red-400'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  )}
+                  title={`Previously: ${prev.toFixed(2)} ${payment.currency}`}
+                >
+                  {increased ? '▲' : '▼'} {increased ? '+' : ''}
+                  {pct.toFixed(1)}% vs prev
+                </div>
+              );
+            })()}
           </div>
 
           <div className='flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100'>

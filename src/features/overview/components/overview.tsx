@@ -13,9 +13,9 @@ import { AreaGraph } from './area-graph';
 import { BarGraph } from './bar-graph';
 import { PieGraph } from './pie-graph';
 import { RecentSales } from './recent-sales';
+import { DashboardPaymentsCard } from './dashboard-payments-card';
 import {
   IconActivity,
-  IconCreditCard,
   IconListCheck,
   IconShoppingCart,
   IconCalendarEvent
@@ -83,30 +83,10 @@ export default async function OverViewPage() {
                 href='/payments'
                 className='block transition-transform hover:scale-[1.01] active:scale-[0.99]'
               >
-                <Card className='hover:bg-muted/50 @container/card h-full cursor-pointer transition-colors'>
-                  <CardHeader className='pb-2'>
-                    <div className='flex items-center justify-between'>
-                      <CardDescription>Payments</CardDescription>
-                      <IconCreditCard className='text-muted-foreground size-4' />
-                    </div>
-                    <CardTitle className='text-2xl font-semibold tabular-nums @[250px]/card:text-3xl'>
-                      ${metrics.payments.totalAmount.toLocaleString()}
-                    </CardTitle>
-                    <CardAction>
-                      {metrics.payments.pendingCount > 0 && (
-                        <Badge
-                          variant='outline'
-                          className='border-amber-500 text-amber-500'
-                        >
-                          {metrics.payments.pendingCount} Unpaid
-                        </Badge>
-                      )}
-                    </CardAction>
-                  </CardHeader>
-                  <CardFooter className='text-muted-foreground text-xs'>
-                    Tracked payments across all categories
-                  </CardFooter>
-                </Card>
+                <DashboardPaymentsCard
+                  byCurrency={metrics.payments.byCurrency}
+                  pendingCount={metrics.payments.pendingCount}
+                />
               </Link>
 
               {/* Workouts Card */}
