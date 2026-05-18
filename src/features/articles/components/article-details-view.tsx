@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeftIcon,
+  ArrowRightIcon,
   Share2Icon,
   CalendarIcon,
   ClockIcon,
@@ -14,14 +16,28 @@ import {
   SparklesIcon,
   TrophyIcon,
   CheckCircle2Icon,
-  RefreshCwIcon
+  RefreshCwIcon,
+  Trash2Icon,
+  ChevronLeftIcon,
+  ChevronRightIcon
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
-import { toggleArticlePublicAction } from '../actions';
+import { toggleArticlePublicAction, deleteArticleAction } from '../actions';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { MermaidDiagram } from '@/components/ui/mermaid-diagram';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '@/components/ui/alert-dialog';
 
 interface Article {
   id: string;
@@ -39,17 +55,28 @@ interface Article {
   updatedAt: Date;
 }
 
+interface AdjacentArticle {
+  id: string;
+  title: string;
+}
+
 interface ArticleDetailsViewProps {
   article: Article;
-  isOwner?: boolean; // If we add user auth to articles
+  isOwner?: boolean;
+  prevArticle?: AdjacentArticle | null;
+  nextArticle?: AdjacentArticle | null;
 }
 
 export function ArticleDetailsView({
   article: initialArticle,
-  isOwner = false
+  isOwner = false,
+  prevArticle,
+  nextArticle
 }: ArticleDetailsViewProps) {
+  const router = useRouter();
   const [article, setArticle] = useState<Article>(initialArticle);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const togglePublic = async () => {
     setIsUpdating(true);
@@ -67,6 +94,18 @@ export function ArticleDetailsView({
       toast.error('Failed to update visibility');
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteArticleAction(article.id);
+      toast.success('Article deleted');
+      router.push('/articles');
+    } catch {
+      toast.error('Failed to delete article');
+      setIsDeleting(false);
     }
   };
 
@@ -353,17 +392,51 @@ export function ArticleDetailsView({
   return (
     <div className='mx-auto w-full max-w-4xl space-y-8 overflow-x-hidden pb-20'>
       <div className='flex flex-wrap items-center justify-between gap-y-2'>
-        <Button
-          variant='ghost'
-          size='sm'
-          asChild
-          className='text-muted-foreground hover:text-primary -ml-2 gap-2'
-        >
-          <Link href='/articles'>
-            <ArrowLeftIcon className='size-4' />
-            <span className='hidden sm:inline'>Back to Daily Feed</span>
-          </Link>
-        </Button>
+        <div className='flex items-center gap-1'>
+          <Button
+            variant='ghost'
+            size='sm'
+            asChild
+            className='text-muted-foreground hover:text-primary -ml-2 gap-2'
+          >
+            <Link href='/articles'>
+              <ArrowLeftIcon className='size-4' />
+              <span className='hidden sm:inline'>Back to Daily Feed</span>
+            </Link>
+          </Button>
+          {prevArticle && (
+            <Button
+              variant='ghost'
+              size='sm'
+              asChild
+              className='text-muted-foreground hover:text-primary gap-1'
+              title={prevArticle.title}
+            >
+              <Link href={`/articles/${prevArticle.id}`}>
+                <ChevronLeftIcon className='size-4' />
+                <span className='hidden sm:inline max-w-[120px] truncate'>
+                  Prev
+                </span>
+              </Link>
+            </Button>
+          )}
+          {nextArticle && (
+            <Button
+              variant='ghost'
+              size='sm'
+              asChild
+              className='text-muted-foreground hover:text-primary gap-1'
+              title={nextArticle.title}
+            >
+              <Link href={`/articles/${nextArticle.id}`}>
+                <span className='hidden sm:inline max-w-[120px] truncate'>
+                  Next
+                </span>
+                <ChevronRightIcon className='size-4' />
+              </Link>
+            </Button>
+          )}
+        </div>
         <div className='flex gap-2'>
           <Button
             variant='outline'
@@ -394,6 +467,38 @@ export function ArticleDetailsView({
                 </>
               )}
             </Button>
+          )}
+          {isOwner && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  className='text-muted-foreground hover:text-destructive shrink-0'
+                  disabled={isDeleting}
+                >
+                  <Trash2Icon className='size-4' />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this article?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. The article will be permanently
+                    deleted.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
       </div>
@@ -481,8 +586,43 @@ export function ArticleDetailsView({
         <div className='article-content'>{renderContent(article.content)}</div>
       </article>
 
-      <footer className='mt-20 space-y-6 border-t pt-12 text-center'>
-        <div className='flex flex-col items-center gap-2'>
+      <footer className='mt-20 space-y-8 border-t pt-12'>
+        {(prevArticle || nextArticle) && (
+          <div className='grid grid-cols-2 gap-4'>
+            <div>
+              {prevArticle && (
+                <Link
+                  href={`/articles/${prevArticle.id}`}
+                  className='group flex flex-col gap-1 rounded-xl border p-4 transition-all hover:border-primary/40 hover:shadow-sm'
+                >
+                  <span className='text-muted-foreground flex items-center gap-1 text-xs font-semibold tracking-wider uppercase'>
+                    <ChevronLeftIcon className='size-3.5' /> Previous
+                  </span>
+                  <span className='text-foreground line-clamp-2 text-sm font-medium group-hover:text-primary transition-colors'>
+                    {prevArticle.title}
+                  </span>
+                </Link>
+              )}
+            </div>
+            <div className='flex justify-end'>
+              {nextArticle && (
+                <Link
+                  href={`/articles/${nextArticle.id}`}
+                  className='group flex w-full flex-col items-end gap-1 rounded-xl border p-4 text-right transition-all hover:border-primary/40 hover:shadow-sm'
+                >
+                  <span className='text-muted-foreground flex items-center gap-1 text-xs font-semibold tracking-wider uppercase'>
+                    Next <ChevronRightIcon className='size-3.5' />
+                  </span>
+                  <span className='text-foreground line-clamp-2 text-sm font-medium group-hover:text-primary transition-colors'>
+                    {nextArticle.title}
+                  </span>
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className='flex flex-col items-center gap-2 text-center'>
           <div className='bg-primary/5 rounded-full p-4'>
             <BookOpenIcon className='text-primary size-10 opacity-50' />
           </div>
@@ -491,15 +631,12 @@ export function ArticleDetailsView({
             Our Daily Feed uses state-of-the-art AI to curate the most relevant
             and trending topics in real-time.
           </p>
+          <div className='flex gap-3 pt-2'>
+            <Button asChild size='lg' variant='outline' className='rounded-full px-8'>
+              <Link href='/articles'>Read More Daily Insights</Link>
+            </Button>
+          </div>
         </div>
-        <Button
-          asChild
-          size='lg'
-          variant='outline'
-          className='rounded-full px-8'
-        >
-          <Link href='/articles'>Read More Daily Insights</Link>
-        </Button>
       </footer>
     </div>
   );
