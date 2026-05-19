@@ -11,6 +11,10 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
+import { Label } from '@/components/ui/label';
 import {
   PlusIcon,
   SparklesIcon,
@@ -18,7 +22,6 @@ import {
   BookOpenIcon,
   Share2Icon,
   Trash2Icon,
-  ArrowRightIcon,
   NewspaperIcon,
   SearchIcon,
   TrendingUpIcon,
@@ -30,9 +33,13 @@ import {
   TrophyIcon,
   RefreshCwIcon,
   CheckCircle2Icon,
-  CalendarIcon,
+  LayoutGridIcon,
+  ListIcon,
+  SlidersHorizontalIcon,
   ChevronDownIcon,
-  ChevronUpIcon
+  ChevronUpIcon,
+  ZapIcon,
+  BanIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUser } from '@clerk/nextjs';
@@ -41,14 +48,13 @@ import {
   generateSystemDesignAction,
   generateTierRankingAction,
   deleteArticleAction,
-  getArticlesAction,
   toggleArticlePublicAction,
   addInterestAction,
   deleteInterestAction,
   getGlobalTrendingTopicsAction
 } from '../actions';
 import { SYSTEM_DESIGN_SYSTEMS } from '../constants';
-import { useGlobalTrendsStore } from '../store';
+import { useGlobalTrendsStore, useFeedPreferencesStore } from '../store';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -64,16 +70,6 @@ import {
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
 import { HoverBorderGradient } from '@/components/ui/hover-border-gradient';
-
-const SUGGESTED_TOPICS = [
-  'Artificial Intelligence',
-  'Space Exploration',
-  'Quantum Computing',
-  'Sustainability',
-  'Longevity Science',
-  'Creator Economy',
-  'Neuroscience'
-];
 
 const TIER_RANKING_EXAMPLES = [
   'Best 5 phones with longest battery life',
@@ -120,38 +116,42 @@ export function ArticlesView({
     userId: cachedUserId,
     setTrends: storeTrends
   } = useGlobalTrendsStore();
+  const {
+    autoGenerateEnabled,
+    blocklist,
+    weights,
+    setAutoGenerate,
+    addToBlocklist,
+    removeFromBlocklist,
+    setWeights
+  } = useFeedPreferencesStore();
+
+  // Generation state
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [isGenerating, setIsGenerating] = useState(false);
   const [searchTopic, setSearchTopic] = useState('');
-  const [personalTopics, setPersonalTopics] = useState<string[]>(initialTopics);
+  const [personalTopics] = useState<string[]>(initialTopics);
   const [managedInterests, setManagedInterests] = useState<UserInterest[]>(
     initialInterests || []
   );
-  const [newInterestInput, setNewInterestInput] = useState('');
-  const [isAddingInterest, setIsAddingInterest] = useState(false);
   const [globalTrends, setGlobalTrends] = useState<string[]>(
     cachedUserId === user?.id ? cachedTrends : []
   );
   const [isFetchingTrends, setIsFetchingTrends] = useState(false);
-  const [isGeneratingSystemDesign, setIsGeneratingSystemDesign] =
-    useState(false);
-  const systemDesignSystems = SYSTEM_DESIGN_SYSTEMS;
+  const [isGeneratingSystemDesign, setIsGeneratingSystemDesign] = useState(false);
   const [tierQuery, setTierQuery] = useState('');
   const [isGeneratingTier, setIsGeneratingTier] = useState(false);
-  const [showTodayPanel, setShowTodayPanel] = useState(true);
 
-  const todaysArticles = articles.filter((a) => {
-    const articleDate = new Date(a.createdAt);
-    const now = new Date();
-    return (
-      articleDate.getFullYear() === now.getFullYear() &&
-      articleDate.getMonth() === now.getMonth() &&
-      articleDate.getDate() === now.getDate()
-    );
-  });
+  // Preferences panel state
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [newInterestInput, setNewInterestInput] = useState('');
+  const [isAddingInterest, setIsAddingInterest] = useState(false);
+  const [newBlocklistInput, setNewBlocklistInput] = useState('');
+
+  // View mode
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   useEffect(() => {
-    // Skip fetch if we already have trends cached for this user
     if (cachedUserId === user?.id && cachedTrends.length > 0) return;
     handleFetchGlobalTrends();
   }, [user?.id]);
@@ -168,7 +168,6 @@ export function ArticlesView({
         : 'Generating a new article from trending topics...'
     );
     try {
-      // If it's a personal topic, generate it as private
       const newArticle = await generateArticleAction(topicToUse, isPersonal);
       setArticles((prev) => [newArticle, ...prev]);
       setSearchTopic('');
@@ -178,7 +177,7 @@ export function ArticlesView({
           : 'Successfully generated a new article!',
         { id: toastId }
       );
-    } catch (e) {
+    } catch {
       toast.error('Failed to generate article. Please try again.', {
         id: toastId
       });
@@ -192,7 +191,7 @@ export function ArticlesView({
       await deleteArticleAction(id);
       setArticles((prev) => prev.filter((a) => a.id !== id));
       toast.success('Article deleted');
-    } catch (e) {
+    } catch {
       toast.error('Failed to delete article');
     }
   };
@@ -201,11 +200,7 @@ export function ArticlesView({
     const url = `${window.location.origin}/articles/${id}`;
     if (navigator.share) {
       navigator
-        .share({
-          title,
-          text: `Check out this article: ${title}`,
-          url
-        })
+        .share({ title, text: `Check out this article: ${title}`, url })
         .catch(console.error);
     } else {
       navigator.clipboard.writeText(url);
@@ -222,7 +217,7 @@ export function ArticlesView({
         )
       );
       toast.success(isPublic ? 'Article published!' : 'Article made private');
-    } catch (e) {
+    } catch {
       toast.error('Failed to update article visibility');
     }
   };
@@ -235,7 +230,7 @@ export function ArticlesView({
       setManagedInterests((prev) => [interest, ...prev]);
       setNewInterestInput('');
       toast.success('Interest added');
-    } catch (e) {
+    } catch {
       toast.error('Failed to add interest');
     } finally {
       setIsAddingInterest(false);
@@ -247,7 +242,7 @@ export function ArticlesView({
       await deleteInterestAction(id);
       setManagedInterests((prev) => prev.filter((i) => i.id !== id));
       toast.success('Interest removed');
-    } catch (e) {
+    } catch {
       toast.error('Failed to remove interest');
     }
   };
@@ -258,10 +253,8 @@ export function ArticlesView({
       const trends = await getGlobalTrendingTopicsAction();
       setGlobalTrends(trends);
       storeTrends(trends, user?.id ?? null);
-      if (trends.length > 0) {
-        toast.success('Found top 3 global trends!');
-      }
-    } catch (e) {
+      if (trends.length > 0) toast.success('Found top 3 global trends!');
+    } catch {
       toast.error('Failed to fetch trending topics');
     } finally {
       setIsFetchingTrends(false);
@@ -309,118 +302,140 @@ export function ArticlesView({
     }
   };
 
+  const ArticleDeleteDialog = ({ article }: { article: Article }) => (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant='ghost'
+          size='icon'
+          className='text-muted-foreground hover:text-destructive h-8 w-8 shrink-0'
+          title='Delete'
+        >
+          <Trash2Icon className='size-4' />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this article?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete the
+            article.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => handleDeleteArticle(article.id)}
+            className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   return (
-    <div className='space-y-12 pb-20'>
-      <div className='flex flex-col gap-8'>
-        <div className='space-y-2 text-center md:text-left'>
-          <h2 className='text-3xl font-bold tracking-tight md:text-5xl'>
-            Daily Intelligence
-          </h2>
-          <p className='text-muted-foreground text-lg md:text-xl'>
-            AI-curated insights on the trends that shape our future.
-          </p>
-        </div>
+    <div className='space-y-8 pb-20'>
+      {/* Header */}
+      <div className='space-y-1'>
+        <h2 className='text-3xl font-bold tracking-tight md:text-5xl'>
+          Daily Intelligence
+        </h2>
+        <p className='text-muted-foreground text-lg md:text-xl'>
+          AI-curated insights on the trends that shape our future.
+        </p>
+      </div>
 
-        <Card className='border-primary/10 bg-muted/20 overflow-hidden border-2 shadow-lg backdrop-blur-sm transition-all'>
-          <CardContent className='space-y-6 p-6'>
-            <div className='flex flex-col gap-4 md:flex-row'>
-              <div className='relative flex-1'>
-                <Input
-                  placeholder='Enter a keyword (e.g., "Future of Energy")'
-                  value={searchTopic}
-                  onChange={(e) => setSearchTopic(e.target.value)}
-                  className='bg-background focus-visible:border-primary/50 h-14 border-2 pl-12 text-lg shadow-sm transition-all'
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && searchTopic.trim())
-                      handleGenerateArticle();
-                  }}
-                />
-                <SearchIcon className='text-muted-foreground absolute top-1/2 left-4 size-5 -translate-y-1/2' />
-              </div>
-              <Button
-                onClick={() => handleGenerateArticle()}
-                disabled={isGenerating}
-                className='shadow-primary/20 h-14 gap-2 px-8 text-lg font-bold shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]'
+      {/* Unified generation card */}
+      <Card className='border-primary/10 bg-muted/20 overflow-hidden border-2 shadow-lg backdrop-blur-sm'>
+        <Tabs defaultValue='daily'>
+          <div className='border-b px-6 pt-4'>
+            <TabsList className='h-9 gap-1 bg-transparent p-0'>
+              <TabsTrigger
+                value='daily'
+                className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-4 py-1.5 text-sm font-medium'
               >
-                {isGenerating ? (
-                  <>
-                    <Loader2Icon className='size-5 animate-spin' />
-                    Crafting...
-                  </>
-                ) : (
-                  <>
-                    <SparklesIcon className='size-5 animate-pulse text-yellow-400' />
-                    {searchTopic ? 'Generate Custom' : 'Explore Current Trends'}
-                  </>
-                )}
-              </Button>
-            </div>
+                <SparklesIcon className='mr-1.5 size-3.5' />
+                Daily Feed
+              </TabsTrigger>
+              <TabsTrigger
+                value='system-design'
+                className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-4 py-1.5 text-sm font-medium'
+              >
+                <ServerIcon className='mr-1.5 size-3.5' />
+                System Design
+              </TabsTrigger>
+              <TabsTrigger
+                value='tier'
+                className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-4 py-1.5 text-sm font-medium'
+              >
+                <TrophyIcon className='mr-1.5 size-3.5' />
+                Tier Rankings
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-            <div className='grid grid-cols-1 gap-8 md:grid-cols-2'>
-              <div className='space-y-3'>
-                <div className='text-muted-foreground flex items-center justify-between text-xs font-bold tracking-[0.2em] uppercase'>
-                  <div className='flex items-center gap-2'>
-                    <TrendingUpIcon className='size-4' />
-                    Your Interests
-                  </div>
+          {/* Daily Feed tab */}
+          <TabsContent value='daily' className='mt-0'>
+            <CardContent className='space-y-5 p-6'>
+              <div className='flex flex-col gap-3 md:flex-row'>
+                <div className='relative flex-1'>
+                  <Input
+                    placeholder='Enter a keyword (e.g., "Future of Energy")'
+                    value={searchTopic}
+                    onChange={(e) => setSearchTopic(e.target.value)}
+                    className='bg-background focus-visible:border-primary/50 h-12 border-2 pl-11 text-base shadow-sm transition-all'
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && searchTopic.trim())
+                        handleGenerateArticle();
+                    }}
+                  />
+                  <SearchIcon className='text-muted-foreground absolute top-1/2 left-3.5 size-4 -translate-y-1/2' />
                 </div>
-
-                <div className='flex flex-wrap gap-2'>
-                  {managedInterests.map((interest) => (
-                    <div key={interest.id} className='group relative'>
-                      <Badge
-                        variant='outline'
-                        className='bg-background hover:bg-primary/5 border-primary/20 flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-all'
-                      >
-                        <span
-                          className='cursor-pointer'
-                          onClick={() => handleGenerateArticle(interest.name)}
-                        >
-                          {interest.name}
-                        </span>
-                        <button
-                          onClick={() => handleDeleteInterest(interest.id)}
-                          className='text-muted-foreground hover:text-destructive underline decoration-dotted transition-colors'
-                        >
-                          <XIcon className='size-3' />
-                        </button>
-                      </Badge>
-                    </div>
-                  ))}
-
-                  <div className='flex items-center gap-2'>
-                    <Input
-                      placeholder='Add interest...'
-                      value={newInterestInput}
-                      onChange={(e) => setNewInterestInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleAddInterest();
-                      }}
-                      className='h-9 w-32 text-xs'
-                    />
-                    <Button
-                      variant='ghost'
-                      size='icon'
-                      onClick={handleAddInterest}
-                      disabled={isAddingInterest || !newInterestInput.trim()}
-                      className='h-9 w-9 border border-dashed'
-                    >
-                      {isAddingInterest ? (
-                        <Loader2Icon className='size-4 animate-spin' />
-                      ) : (
-                        <PlusIcon className='size-4' />
-                      )}
-                    </Button>
-                  </div>
-                </div>
+                <Button
+                  onClick={() => handleGenerateArticle()}
+                  disabled={isGenerating}
+                  className='h-12 gap-2 px-6 font-bold'
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2Icon className='size-4 animate-spin' /> Crafting...
+                    </>
+                  ) : (
+                    <>
+                      <SparklesIcon className='size-4 text-yellow-400' />
+                      {searchTopic ? 'Generate' : 'Explore Trends'}
+                    </>
+                  )}
+                </Button>
               </div>
 
-              <div className='space-y-3'>
-                <div className='text-muted-foreground flex items-center justify-between text-xs font-bold tracking-[0.2em] uppercase'>
-                  <div className='flex items-center gap-2'>
-                    <GlobeIcon className='size-4' />
-                    Global Trends
+              {managedInterests.length > 0 && (
+                <div className='space-y-2'>
+                  <p className='text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-[0.2em] uppercase'>
+                    <TrendingUpIcon className='size-3.5' /> Your Interests
+                  </p>
+                  <div className='flex flex-wrap gap-2'>
+                    {managedInterests.map((interest) => (
+                      <Badge
+                        key={interest.id}
+                        variant='outline'
+                        className='bg-background hover:bg-primary/5 border-primary/20 cursor-pointer rounded-full px-3 py-1 text-sm font-medium shadow-sm transition-all'
+                        onClick={() => handleGenerateArticle(interest.name)}
+                      >
+                        {interest.name}
+                      </Badge>
+                    ))}
                   </div>
+                </div>
+              )}
+
+              <div className='space-y-2'>
+                <div className='flex items-center justify-between'>
+                  <p className='text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-[0.2em] uppercase'>
+                    <GlobeIcon className='size-3.5' /> Global Trends
+                  </p>
                   <Button
                     variant='ghost'
                     size='sm'
@@ -436,7 +451,7 @@ export function ArticlesView({
                     Suggest Top 3
                   </Button>
                 </div>
-                <div className='flex flex-wrap gap-3'>
+                <div className='flex flex-wrap gap-2'>
                   {globalTrends.length > 0 ? (
                     globalTrends.map((topic) => (
                       <HoverBorderGradient
@@ -445,42 +460,40 @@ export function ArticlesView({
                         disabled={isGenerating}
                         className='bg-background flex items-center justify-center p-0'
                         containerClassName={cn(
-                          'h-10',
+                          'h-9',
                           isGenerating && 'opacity-50 cursor-not-allowed'
                         )}
                       >
-                        <span className='text-foreground dark:text-foreground/90 px-4 py-2 text-sm font-medium'>
+                        <span className='text-foreground px-3 py-1.5 text-sm font-medium'>
                           {topic}
                         </span>
                       </HoverBorderGradient>
                     ))
                   ) : (
-                    <div className='text-muted-foreground py-2 text-xs italic'>
+                    <p className='text-muted-foreground py-1 text-xs italic'>
                       {isFetchingTrends
-                        ? 'Fetching latest trends...'
+                        ? 'Fetching...'
                         : "Click above to see what's trending globally..."}
-                    </div>
+                    </p>
                   )}
                 </div>
               </div>
 
               {personalTopics.length > 0 && (
-                <div className='space-y-3'>
-                  <div className='text-primary flex items-center gap-2 text-xs font-bold tracking-[0.2em] uppercase'>
-                    <SparklesIcon className='size-4' />
-                    Suggested from Lists
-                  </div>
+                <div className='space-y-2'>
+                  <p className='text-primary flex items-center gap-1.5 text-xs font-bold tracking-[0.2em] uppercase'>
+                    <SparklesIcon className='size-3.5' /> Suggested from Lists
+                  </p>
                   <div className='flex flex-wrap gap-2'>
                     {personalTopics.map((topic) => (
                       <button
                         key={topic}
                         onClick={() => handleGenerateArticle(topic, true)}
                         disabled={isGenerating}
-                        className='group relative'
                       >
                         <Badge
                           variant='outline'
-                          className='border-primary/30 bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-all'
+                          className='border-primary/30 bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-sm font-medium transition-all'
                         >
                           {topic}
                         </Badge>
@@ -489,294 +502,355 @@ export function ArticlesView({
                   </div>
                 </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </TabsContent>
 
-      {/* System Design Series */}
-      <Card className='border-primary/10 overflow-hidden border-2 shadow-lg backdrop-blur-sm'>
-        <CardContent className='space-y-5 p-6'>
-          <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-            <div className='space-y-1'>
-              <div className='flex items-center gap-2'>
-                <ServerIcon className='text-primary size-5' />
-                <h3 className='text-lg font-bold'>System Design Series</h3>
-              </div>
-              <p className='text-muted-foreground text-sm'>
-                Deep-dive breakdowns covering functional requirements,
-                non-functional requirements, core entities, database design,
-                APIs, and scalability — hellointerview.com style.
-              </p>
-            </div>
-            <Button
-              onClick={() => handleGenerateSystemDesign()}
-              disabled={isGeneratingSystemDesign}
-              variant='outline'
-              className='shrink-0 gap-2'
-            >
-              {isGeneratingSystemDesign ? (
-                <Loader2Icon className='size-4 animate-spin' />
-              ) : (
-                <ShuffleIcon className='size-4' />
-              )}
-              Random
-            </Button>
-          </div>
-
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
-              Pick a system
-            </p>
-            <div className='flex flex-wrap gap-2'>
-              {systemDesignSystems.map((system) => (
-                <button
-                  key={system}
-                  onClick={() => handleGenerateSystemDesign(system)}
+          {/* System Design tab */}
+          <TabsContent value='system-design' className='mt-0'>
+            <CardContent className='space-y-5 p-6'>
+              <div className='flex items-start justify-between gap-4'>
+                <p className='text-muted-foreground text-sm leading-relaxed'>
+                  Deep-dive breakdowns covering functional requirements,
+                  non-functional requirements, database design, APIs, and
+                  scalability — hellointerview.com style.
+                </p>
+                <Button
+                  onClick={() => handleGenerateSystemDesign()}
                   disabled={isGeneratingSystemDesign}
-                  className='group'
+                  variant='outline'
+                  size='sm'
+                  className='shrink-0 gap-2'
                 >
-                  <Badge
-                    variant='outline'
-                    className='hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-sm font-medium transition-all group-disabled:cursor-not-allowed group-disabled:opacity-50'
-                  >
-                    {system}
-                  </Badge>
-                </button>
-              ))}
-            </div>
-          </div>
-        </CardContent>
+                  {isGeneratingSystemDesign ? (
+                    <Loader2Icon className='size-4 animate-spin' />
+                  ) : (
+                    <ShuffleIcon className='size-4' />
+                  )}
+                  Random
+                </Button>
+              </div>
+              <div className='space-y-2'>
+                <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
+                  Pick a system
+                </p>
+                <div className='flex flex-wrap gap-2'>
+                  {SYSTEM_DESIGN_SYSTEMS.map((system) => (
+                    <button
+                      key={system}
+                      onClick={() => handleGenerateSystemDesign(system)}
+                      disabled={isGeneratingSystemDesign}
+                      className='group'
+                    >
+                      <Badge
+                        variant='outline'
+                        className='hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-sm font-medium transition-all group-disabled:cursor-not-allowed group-disabled:opacity-50'
+                      >
+                        {system}
+                      </Badge>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </TabsContent>
+
+          {/* Tier Rankings tab */}
+          <TabsContent value='tier' className='mt-0'>
+            <CardContent className='space-y-5 p-6'>
+              <p className='text-muted-foreground text-sm leading-relaxed'>
+                Search for any ranked list — best products, local spots, tools,
+                or anything you want compared. Refreshed daily to stay current.
+              </p>
+              <div className='flex flex-col gap-3 sm:flex-row'>
+                <div className='relative flex-1'>
+                  <Input
+                    placeholder='e.g. "Best 5 phones with longest battery life"'
+                    value={tierQuery}
+                    onChange={(e) => setTierQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && tierQuery.trim())
+                        handleGenerateTierRanking();
+                    }}
+                    className='bg-background focus-visible:border-primary/50 h-11 border-2 pl-10 shadow-sm transition-all'
+                    disabled={isGeneratingTier}
+                  />
+                  <SearchIcon className='text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2' />
+                </div>
+                <Button
+                  onClick={() => handleGenerateTierRanking()}
+                  disabled={isGeneratingTier || !tierQuery.trim()}
+                  className='h-11 gap-2 px-6 font-semibold'
+                >
+                  {isGeneratingTier ? (
+                    <>
+                      <Loader2Icon className='size-4 animate-spin' /> Ranking...
+                    </>
+                  ) : (
+                    <>
+                      <TrophyIcon className='size-4' /> Generate Ranking
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className='space-y-2'>
+                <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
+                  Try these examples
+                </p>
+                <div className='flex flex-wrap gap-2'>
+                  {TIER_RANKING_EXAMPLES.map((example) => (
+                    <button
+                      key={example}
+                      onClick={() => handleGenerateTierRanking(example)}
+                      disabled={isGeneratingTier}
+                      className='group'
+                    >
+                      <Badge
+                        variant='outline'
+                        className='border-primary/30 bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all group-disabled:cursor-not-allowed group-disabled:opacity-50'
+                      >
+                        {example}
+                      </Badge>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </TabsContent>
+        </Tabs>
       </Card>
 
-      {/* Tier Rankings Series */}
-      <Card className='border-primary/10 overflow-hidden border-2 shadow-lg backdrop-blur-sm'>
-        <CardContent className='space-y-5 p-6'>
-          <div className='space-y-1'>
-            <div className='flex items-center gap-2'>
-              <TrophyIcon className='text-primary size-5' />
-              <h3 className='text-lg font-bold'>Tier Rankings</h3>
-            </div>
-            <p className='text-muted-foreground text-sm'>
-              Search for any ranked list — best products, local spots, tools, or
-              anything you want compared. Refreshed daily to stay current.
-            </p>
-          </div>
-
-          <div className='flex flex-col gap-3 sm:flex-row'>
-            <div className='relative flex-1'>
-              <Input
-                placeholder='e.g. "Best 5 phones with longest battery life"'
-                value={tierQuery}
-                onChange={(e) => setTierQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && tierQuery.trim())
-                    handleGenerateTierRanking();
-                }}
-                className='bg-background focus-visible:border-primary/50 h-11 border-2 pl-10 shadow-sm transition-all'
-                disabled={isGeneratingTier}
-              />
-              <SearchIcon className='text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2' />
-            </div>
-            <Button
-              onClick={() => handleGenerateTierRanking()}
-              disabled={isGeneratingTier || !tierQuery.trim()}
-              className='h-11 gap-2 px-6 font-semibold'
-            >
-              {isGeneratingTier ? (
-                <>
-                  <Loader2Icon className='size-4 animate-spin' />
-                  Ranking...
-                </>
-              ) : (
-                <>
-                  <TrophyIcon className='size-4' />
-                  Generate Ranking
-                </>
-              )}
-            </Button>
-          </div>
-
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
-              Try these examples
-            </p>
-            <div className='flex flex-wrap gap-2'>
-              {TIER_RANKING_EXAMPLES.map((example) => (
-                <button
-                  key={example}
-                  onClick={() => handleGenerateTierRanking(example)}
-                  disabled={isGeneratingTier}
-                  className='group'
-                >
-                  <Badge
-                    variant='outline'
-                    className='border-primary/30 bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all group-disabled:cursor-not-allowed group-disabled:opacity-50'
-                  >
-                    {example}
-                  </Badge>
-                </button>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Today's Content Management */}
-      <Card className='border-primary/10 overflow-hidden border-2 shadow-lg backdrop-blur-sm'>
-        <CardHeader className='pb-3'>
+      {/* Feed Preferences */}
+      <Card className='overflow-hidden'>
+        <CardHeader className='pb-2'>
           <div className='flex items-center justify-between'>
-            <div className='flex items-center gap-2'>
-              <CalendarIcon className='text-primary size-5' />
-              <CardTitle className='text-lg'>
-                Today&apos;s Content
-                {todaysArticles.length > 0 && (
-                  <span className='text-muted-foreground ml-2 text-sm font-normal'>
-                    {todaysArticles.length} article
-                    {todaysArticles.length !== 1 ? 's' : ''} generated
-                  </span>
-                )}
-              </CardTitle>
-            </div>
-            <Button
-              variant='ghost'
-              size='sm'
-              className='text-muted-foreground h-8 w-8 p-0'
-              onClick={() => setShowTodayPanel((v) => !v)}
+            <button
+              className='flex flex-1 items-center gap-2 text-left'
+              onClick={() => setShowPreferences((v) => !v)}
             >
-              {showTodayPanel ? (
-                <ChevronUpIcon className='size-4' />
+              <SlidersHorizontalIcon className='text-primary size-4 shrink-0' />
+              <CardTitle className='text-base'>Feed Preferences</CardTitle>
+              {showPreferences ? (
+                <ChevronUpIcon className='text-muted-foreground ml-auto size-4' />
               ) : (
-                <ChevronDownIcon className='size-4' />
+                <ChevronDownIcon className='text-muted-foreground ml-auto size-4' />
               )}
-            </Button>
+            </button>
           </div>
-          <p className='text-muted-foreground text-sm'>
-            Manage the articles generated today — toggle visibility or remove
-            content from your daily feed.
+          <p className='text-muted-foreground text-xs'>
+            Control what gets auto-generated for your daily feed.
           </p>
         </CardHeader>
 
-        {showTodayPanel && (
-          <CardContent className='pt-0'>
-            {todaysArticles.length === 0 ? (
-              <div className='text-muted-foreground py-6 text-center text-sm italic'>
-                No articles generated yet today. Use any panel above to create
-                content.
+        {showPreferences && (
+          <CardContent className='space-y-7 pt-2'>
+            {/* Auto-generate toggle */}
+            <div className='flex items-center justify-between rounded-lg border p-3'>
+              <div className='space-y-0.5'>
+                <Label className='flex items-center gap-2 text-sm font-medium'>
+                  <ZapIcon className='text-primary size-3.5' />
+                  Auto-generate daily content
+                </Label>
+                <p className='text-muted-foreground text-xs'>
+                  Automatically create new articles each day based on your
+                  preferences
+                </p>
               </div>
-            ) : (
-              <div className='divide-y'>
-                {todaysArticles.map((article) => (
-                  <div
-                    key={article.id}
-                    className='flex items-center gap-3 py-3 first:pt-0 last:pb-0'
-                  >
-                    <div className='min-w-0 flex-1'>
-                      <Link
-                        href={`/articles/${article.id}`}
-                        className='hover:text-primary line-clamp-1 text-sm font-medium transition-colors'
-                      >
-                        {article.title}
-                      </Link>
-                      <div className='mt-1 flex flex-wrap items-center gap-2'>
-                        {article.topic && (
-                          <Badge
-                            variant='secondary'
-                            className='bg-primary/10 text-primary px-2 py-0 text-[9px] tracking-wider uppercase'
-                          >
-                            {article.topic}
-                          </Badge>
-                        )}
-                        {article.seriesType === 'tier' && (
-                          <Badge
-                            variant='outline'
-                            className='gap-1 px-2 py-0 text-[9px] tracking-wider uppercase'
-                          >
-                            <TrophyIcon className='size-2.5' /> Tier
-                          </Badge>
-                        )}
-                        <span className='text-muted-foreground text-[10px]'>
-                          {formatDistanceToNow(article.createdAt, {
-                            addSuffix: true
-                          })}
-                        </span>
-                      </div>
-                    </div>
+              <Switch
+                checked={autoGenerateEnabled}
+                onCheckedChange={setAutoGenerate}
+              />
+            </div>
 
-                    <div className='flex shrink-0 items-center gap-1'>
-                      {article.userId === user?.id && (
-                        <Button
-                          variant='ghost'
-                          size='icon'
-                          className={`h-7 w-7 ${article.isPublic === 'true' ? 'text-primary' : 'text-muted-foreground'}`}
-                          onClick={() =>
-                            handleTogglePublic(
-                              article.id,
-                              article.isPublic === 'false'
-                            )
-                          }
-                          title={
-                            article.isPublic === 'true'
-                              ? 'Make Private'
-                              : 'Publish'
-                          }
-                        >
-                          {article.isPublic === 'true' ? (
-                            <GlobeIcon className='size-3.5' />
-                          ) : (
-                            <LockIcon className='size-3.5' />
-                          )}
-                        </Button>
-                      )}
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant='ghost'
-                            size='icon'
-                            className='text-muted-foreground hover:text-destructive h-7 w-7'
-                            title='Delete'
-                          >
-                            <Trash2Icon className='size-3.5' />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete this article?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action cannot be undone. This will permanently
-                              delete the article.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteArticle(article.id)}
-                              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+            {/* Source weights */}
+            <div className='space-y-4'>
+              <div>
+                <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
+                  Source Weights
+                </p>
+                <p className='text-muted-foreground mt-0.5 text-xs'>
+                  Tune how much each source influences auto-generated content.
+                </p>
+              </div>
+              <div className='space-y-5'>
+                {(
+                  [
+                    {
+                      key: 'interests' as const,
+                      label: 'Your Interests',
+                      icon: <TrendingUpIcon className='size-3.5' />
+                    },
+                    {
+                      key: 'trends' as const,
+                      label: 'Global Trends',
+                      icon: <GlobeIcon className='size-3.5' />
+                    },
+                    {
+                      key: 'lists' as const,
+                      label: 'From Your Lists',
+                      icon: <SparklesIcon className='size-3.5' />
+                    }
+                  ] as const
+                ).map(({ key, label, icon }) => (
+                  <div key={key} className='space-y-2'>
+                    <div className='flex items-center justify-between'>
+                      <Label className='text-muted-foreground flex items-center gap-1.5 text-xs font-medium'>
+                        {icon} {label}
+                      </Label>
+                      <span className='text-muted-foreground w-8 text-right text-xs tabular-nums'>
+                        {weights[key]}%
+                      </span>
                     </div>
+                    <Slider
+                      value={[weights[key]]}
+                      onValueChange={([v]) => setWeights({ [key]: v })}
+                      min={0}
+                      max={100}
+                      step={5}
+                    />
                   </div>
                 ))}
               </div>
-            )}
+            </div>
+
+            {/* Interests management */}
+            <div className='space-y-3'>
+              <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
+                Managed Interests
+              </p>
+              <div className='flex flex-wrap gap-2'>
+                {managedInterests.map((interest) => (
+                  <Badge
+                    key={interest.id}
+                    variant='outline'
+                    className='bg-background border-primary/20 flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium'
+                  >
+                    {interest.name}
+                    <button
+                      onClick={() => handleDeleteInterest(interest.id)}
+                      className='text-muted-foreground hover:text-destructive transition-colors'
+                    >
+                      <XIcon className='size-3' />
+                    </button>
+                  </Badge>
+                ))}
+                <div className='flex items-center gap-2'>
+                  <Input
+                    placeholder='Add interest...'
+                    value={newInterestInput}
+                    onChange={(e) => setNewInterestInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddInterest();
+                    }}
+                    className='h-8 w-32 text-xs'
+                  />
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    onClick={handleAddInterest}
+                    disabled={isAddingInterest || !newInterestInput.trim()}
+                    className='h-8 w-8 border border-dashed'
+                  >
+                    {isAddingInterest ? (
+                      <Loader2Icon className='size-3.5 animate-spin' />
+                    ) : (
+                      <PlusIcon className='size-3.5' />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Blocklist */}
+            <div className='space-y-3'>
+              <div>
+                <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
+                  Topic Blocklist
+                </p>
+                <p className='text-muted-foreground mt-0.5 text-xs'>
+                  Topics you never want generated in your feed.
+                </p>
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                {blocklist.map((item) => (
+                  <Badge
+                    key={item.id}
+                    variant='outline'
+                    className='border-destructive/30 bg-destructive/5 flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium'
+                  >
+                    <BanIcon className='text-destructive/60 size-3 shrink-0' />
+                    {item.topic}
+                    <button
+                      onClick={() => removeFromBlocklist(item.id)}
+                      className='text-muted-foreground hover:text-destructive transition-colors'
+                    >
+                      <XIcon className='size-3' />
+                    </button>
+                  </Badge>
+                ))}
+                <div className='flex items-center gap-2'>
+                  <Input
+                    placeholder='Block a topic...'
+                    value={newBlocklistInput}
+                    onChange={(e) => setNewBlocklistInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newBlocklistInput.trim()) {
+                        addToBlocklist(newBlocklistInput.trim());
+                        setNewBlocklistInput('');
+                      }
+                    }}
+                    className='h-8 w-36 text-xs'
+                  />
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    disabled={!newBlocklistInput.trim()}
+                    onClick={() => {
+                      if (newBlocklistInput.trim()) {
+                        addToBlocklist(newBlocklistInput.trim());
+                        setNewBlocklistInput('');
+                      }
+                    }}
+                    className='h-8 w-8 border border-dashed'
+                  >
+                    <PlusIcon className='size-3.5' />
+                  </Button>
+                </div>
+              </div>
+            </div>
           </CardContent>
         )}
       </Card>
 
-      <div className='space-y-8'>
-        <div className='flex items-center gap-4'>
-          <div className='bg-border h-px flex-1' />
-          <h3 className='text-muted-foreground text-xs font-bold tracking-[0.3em] uppercase'>
-            Latest Insights
-          </h3>
-          <div className='bg-border h-px flex-1' />
+      {/* Latest Insights header with view toggle */}
+      <div className='flex items-center gap-3'>
+        <div className='bg-border h-px flex-1' />
+        <h3 className='text-muted-foreground text-xs font-bold tracking-[0.3em] uppercase'>
+          Latest Insights
+        </h3>
+        <div className='bg-border h-px flex-1' />
+        <div className='flex items-center gap-0.5 rounded-lg border p-0.5'>
+          <Button
+            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+            size='icon'
+            className='h-6 w-6'
+            onClick={() => setViewMode('grid')}
+            title='Grid view'
+          >
+            <LayoutGridIcon className='size-3.5' />
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size='icon'
+            className='h-6 w-6'
+            onClick={() => setViewMode('list')}
+            title='List view'
+          >
+            <ListIcon className='size-3.5' />
+          </Button>
         </div>
       </div>
 
+      {/* Articles */}
       {articles.length === 0 ? (
         <Card className='flex flex-col items-center justify-center border-dashed py-24 text-center'>
           <div className='bg-primary/10 text-primary mb-4 flex size-16 items-center justify-center rounded-full'>
@@ -796,7 +870,7 @@ export function ArticlesView({
             Generate First Article
           </Button>
         </Card>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className='grid gap-6 sm:grid-cols-2 lg:grid-cols-3'>
           {articles.map((article) => (
             <Card
@@ -815,17 +889,16 @@ export function ArticlesView({
                     {article.seriesType === 'tier' &&
                       article.lastValidatedAt &&
                       (() => {
-                        const hoursSinceValidation =
+                        const h =
                           (Date.now() -
                             new Date(article.lastValidatedAt).getTime()) /
-                          (1000 * 60 * 60);
-                        return hoursSinceValidation < 24 ? (
+                          3600000;
+                        return h < 24 ? (
                           <Badge
                             variant='outline'
                             className='gap-1 border-emerald-500/50 px-2 py-0.5 text-[9px] tracking-widest text-emerald-600 uppercase dark:text-emerald-400'
                           >
-                            <CheckCircle2Icon className='size-2.5' />
-                            Updated
+                            <CheckCircle2Icon className='size-2.5' /> Updated
                           </Badge>
                         ) : (
                           <Badge
@@ -896,7 +969,7 @@ export function ArticlesView({
                     <Button
                       variant='ghost'
                       size='icon'
-                      className={`h-8 w-8 shrink-0 ${article.isPublic === 'true' ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
+                      className='h-8 w-8 shrink-0'
                       onClick={() =>
                         handleTogglePublic(
                           article.id,
@@ -908,49 +981,111 @@ export function ArticlesView({
                       }
                     >
                       <GlobeIcon
-                        className={`size-4 transition-all ${
+                        className={cn(
+                          'size-4 transition-all',
                           article.isPublic === 'true'
                             ? 'text-primary'
-                            : 'opacity-20'
-                        }`}
+                            : 'text-muted-foreground opacity-30'
+                        )}
                       />
                     </Button>
                   )}
                 </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant='ghost'
-                      size='icon'
-                      className='text-muted-foreground hover:text-destructive ml-auto h-8 w-8 shrink-0'
-                      title='Delete'
-                    >
-                      <Trash2Icon className='size-4' />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        Are you absolutely sure?
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone. This will permanently
-                        delete your article.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => handleDeleteArticle(article.id)}
-                        className='bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all hover:scale-[1.02] active:scale-[0.98]'
-                      >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <ArticleDeleteDialog article={article} />
               </CardFooter>
             </Card>
+          ))}
+        </div>
+      ) : (
+        /* List view */
+        <div className='divide-y rounded-xl border'>
+          {articles.map((article) => (
+            <div
+              key={article.id}
+              className='hover:bg-muted/30 flex items-center gap-4 px-4 py-3 transition-colors'
+            >
+              <div className='min-w-0 flex-1'>
+                <Link
+                  href={`/articles/${article.id}`}
+                  className='hover:text-primary line-clamp-1 text-sm font-medium transition-colors'
+                >
+                  {article.title}
+                </Link>
+                <div className='mt-1 flex flex-wrap items-center gap-2'>
+                  {article.topic && (
+                    <Badge
+                      variant='secondary'
+                      className='bg-primary/10 text-primary px-2 py-0 text-[9px] tracking-widest uppercase'
+                    >
+                      {article.topic}
+                    </Badge>
+                  )}
+                  {article.seriesType === 'tier' && (
+                    <Badge
+                      variant='outline'
+                      className='gap-1 px-2 py-0 text-[9px] tracking-widest uppercase'
+                    >
+                      <TrophyIcon className='size-2.5' /> Tier
+                    </Badge>
+                  )}
+                  {article.isPublic === 'false' && (
+                    <Badge
+                      variant='outline'
+                      className='border-yellow-500/50 px-2 py-0 text-[9px] tracking-widest text-yellow-600 uppercase dark:text-yellow-400'
+                    >
+                      Private
+                    </Badge>
+                  )}
+                  <span className='text-muted-foreground text-[10px]'>
+                    {formatDistanceToNow(article.createdAt, { addSuffix: true })}
+                  </span>
+                </div>
+              </div>
+              <div className='flex shrink-0 items-center gap-1'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  asChild
+                  className='h-7 gap-1 text-xs'
+                >
+                  <Link href={`/articles/${article.id}`}>
+                    <BookOpenIcon className='size-3' /> Read
+                  </Link>
+                </Button>
+                <Button
+                  variant='ghost'
+                  size='icon'
+                  className='text-muted-foreground hover:text-primary h-7 w-7'
+                  onClick={() => handleShare(article.id, article.title)}
+                  title='Share'
+                >
+                  <Share2Icon className='size-3.5' />
+                </Button>
+                {article.userId === user?.id && (
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    className='h-7 w-7'
+                    onClick={() =>
+                      handleTogglePublic(
+                        article.id,
+                        article.isPublic === 'false'
+                      )
+                    }
+                    title={
+                      article.isPublic === 'true' ? 'Make Private' : 'Publish'
+                    }
+                  >
+                    {article.isPublic === 'true' ? (
+                      <GlobeIcon className='text-primary size-3.5' />
+                    ) : (
+                      <LockIcon className='text-muted-foreground size-3.5 opacity-40' />
+                    )}
+                  </Button>
+                )}
+                <ArticleDeleteDialog article={article} />
+              </div>
+            </div>
           ))}
         </div>
       )}
