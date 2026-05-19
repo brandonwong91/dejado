@@ -322,7 +322,7 @@ export function ArticleDetailsView({
                     return (
                       <h1
                         key={li}
-                        className='text-foreground mt-10 mb-6 text-3xl font-bold'
+                        className='text-foreground mt-10 mb-6 text-2xl font-bold sm:text-3xl'
                       >
                         {processInline(t.slice(2), li)}
                       </h1>
@@ -331,7 +331,7 @@ export function ArticleDetailsView({
                     return (
                       <h2
                         key={li}
-                        className='text-foreground/90 mt-8 mb-4 text-2xl font-bold'
+                        className='text-foreground/90 mt-8 mb-4 text-xl font-bold sm:text-2xl'
                       >
                         {processInline(t.slice(3), li)}
                       </h2>
@@ -340,7 +340,7 @@ export function ArticleDetailsView({
                     return (
                       <h3
                         key={li}
-                        className='text-foreground/80 mt-6 mb-3 text-xl font-bold'
+                        className='text-foreground/80 mt-6 mb-3 text-lg font-bold sm:text-xl'
                       >
                         {processInline(t.slice(4), li)}
                       </h3>
@@ -391,57 +391,67 @@ export function ArticleDetailsView({
   };
   return (
     <div className='mx-auto w-full max-w-4xl space-y-8 overflow-x-hidden pb-20'>
-      <div className='flex flex-wrap items-center justify-between gap-y-2'>
-        <div className='flex items-center gap-1'>
+      {/* Top action bar — single row, never wraps */}
+      <div className='flex items-center justify-between gap-2'>
+        {/* Left: back + prev/next nav */}
+        <div className='flex min-w-0 items-center gap-0.5'>
           <Button
             variant='ghost'
             size='sm'
             asChild
-            className='text-muted-foreground hover:text-primary -ml-2 gap-2'
+            className='text-muted-foreground hover:text-primary shrink-0 gap-1.5 px-2'
           >
             <Link href='/articles'>
               <ArrowLeftIcon className='size-4' />
-              <span className='hidden sm:inline'>Back to Daily Feed</span>
+              <span className='hidden sm:inline'>Feed</span>
             </Link>
           </Button>
           {prevArticle && (
-            <Button
-              variant='ghost'
-              size='sm'
-              asChild
-              className='text-muted-foreground hover:text-primary gap-1'
-              title={prevArticle.title}
-            >
-              <Link href={`/articles/${prevArticle.id}`}>
-                <ChevronLeftIcon className='size-4' />
-                <span className='hidden sm:inline max-w-[120px] truncate'>
-                  Prev
-                </span>
-              </Link>
-            </Button>
+            <>
+              <span className='text-border select-none'>/</span>
+              <Button
+                variant='ghost'
+                size='sm'
+                asChild
+                className='text-muted-foreground hover:text-primary min-w-0 gap-1 px-2'
+                title={prevArticle.title}
+              >
+                <Link href={`/articles/${prevArticle.id}`}>
+                  <ChevronLeftIcon className='size-4 shrink-0' />
+                  <span className='hidden max-w-[100px] truncate sm:inline'>
+                    {prevArticle.title}
+                  </span>
+                </Link>
+              </Button>
+            </>
           )}
           {nextArticle && (
-            <Button
-              variant='ghost'
-              size='sm'
-              asChild
-              className='text-muted-foreground hover:text-primary gap-1'
-              title={nextArticle.title}
-            >
-              <Link href={`/articles/${nextArticle.id}`}>
-                <span className='hidden sm:inline max-w-[120px] truncate'>
-                  Next
-                </span>
-                <ChevronRightIcon className='size-4' />
-              </Link>
-            </Button>
+            <>
+              <span className='text-border select-none'>/</span>
+              <Button
+                variant='ghost'
+                size='sm'
+                asChild
+                className='text-muted-foreground hover:text-primary min-w-0 gap-1 px-2'
+                title={nextArticle.title}
+              >
+                <Link href={`/articles/${nextArticle.id}`}>
+                  <span className='hidden max-w-[100px] truncate sm:inline'>
+                    {nextArticle.title}
+                  </span>
+                  <ChevronRightIcon className='size-4 shrink-0' />
+                </Link>
+              </Button>
+            </>
           )}
         </div>
-        <div className='flex gap-2'>
+
+        {/* Right: actions */}
+        <div className='flex shrink-0 items-center gap-1'>
           <Button
-            variant='outline'
+            variant='ghost'
             size='sm'
-            className='shrink-0 gap-2'
+            className='gap-1.5 px-2'
             onClick={handleShare}
           >
             <Share2Icon className='size-4' />
@@ -449,20 +459,20 @@ export function ArticleDetailsView({
           </Button>
           {isOwner && (
             <Button
-              variant={article.isPublic === 'true' ? 'secondary' : 'default'}
+              variant='ghost'
               size='sm'
-              className='shrink-0 gap-2'
+              className='gap-1.5 px-2'
               onClick={togglePublic}
               disabled={isUpdating}
             >
               {article.isPublic === 'true' ? (
                 <>
-                  <GlobeIcon className='size-4' />
+                  <GlobeIcon className='text-primary size-4' />
                   <span className='hidden sm:inline'>Public</span>
                 </>
               ) : (
                 <>
-                  <LockIcon className='size-4' />
+                  <LockIcon className='text-muted-foreground size-4' />
                   <span className='hidden sm:inline'>Private</span>
                 </>
               )}
@@ -474,7 +484,7 @@ export function ArticleDetailsView({
                 <Button
                   variant='ghost'
                   size='sm'
-                  className='text-muted-foreground hover:text-destructive shrink-0'
+                  className='text-muted-foreground hover:text-destructive px-2'
                   disabled={isDeleting}
                 >
                   <Trash2Icon className='size-4' />
@@ -546,40 +556,36 @@ export function ArticleDetailsView({
           {article.title}
         </h1>
         {article.seriesType === 'tier' && article.tierQuery && (
-          <div className='bg-muted/40 mx-auto flex max-w-xl items-center gap-2 rounded-full px-4 py-2 text-sm'>
-            <TrophyIcon className='text-primary size-4 shrink-0' />
+          <div className='bg-muted/40 mx-auto flex max-w-xl items-start gap-2 rounded-2xl px-4 py-2 text-sm'>
+            <TrophyIcon className='text-primary mt-0.5 size-4 shrink-0' />
             <span className='text-muted-foreground italic'>
               &ldquo;{article.tierQuery}&rdquo;
             </span>
           </div>
         )}
-        <div className='text-muted-foreground flex flex-wrap items-center justify-center gap-4 pt-4 text-sm font-medium'>
+        <div className='text-muted-foreground flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 pt-4 text-sm font-medium'>
           <div className='flex items-center gap-2'>
-            <div className='bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-full font-bold shadow-sm'>
-              <SparklesIcon className='size-4' />
+            <div className='bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-full font-bold shadow-sm'>
+              <SparklesIcon className='size-3.5' />
             </div>
             <span>AI Daily</span>
           </div>
-          <span className='opacity-30'>|</span>
           <div className='flex items-center gap-1.5'>
-            <CalendarIcon className='size-4' />
-            {format(article.createdAt, 'MMMM d, yyyy')}
+            <CalendarIcon className='size-3.5' />
+            {format(article.createdAt, 'MMM d, yyyy')}
           </div>
           {article.seriesType === 'tier' && (
-            <>
-              <span className='opacity-30'>|</span>
-              <div className='flex items-center gap-1.5'>
-                <RefreshCwIcon className='size-4' />
-                Content last updated {format(article.updatedAt, 'MMMM d, yyyy')}
-              </div>
-            </>
+            <div className='flex items-center gap-1.5'>
+              <RefreshCwIcon className='size-3.5' />
+              Updated {format(article.updatedAt, 'MMM d, yyyy')}
+            </div>
           )}
         </div>
       </header>
 
-      <article className='prose prose-neutral dark:prose-invert prose-lg max-w-none overflow-x-hidden md:px-8'>
+      <article className='prose prose-neutral dark:prose-invert max-w-none overflow-x-hidden sm:prose-lg md:px-8'>
         {article.summary && (
-          <div className='bg-muted/30 border-primary text-foreground mb-12 rounded-r-2xl border-l-4 p-4 text-base leading-relaxed italic sm:p-6 sm:text-xl'>
+          <div className='bg-muted/30 border-primary text-foreground mb-8 rounded-r-xl border-l-4 p-4 text-sm leading-relaxed italic sm:mb-12 sm:p-6 sm:text-lg'>
             &ldquo;{article.summary}&rdquo;
           </div>
         )}
@@ -588,37 +594,37 @@ export function ArticleDetailsView({
 
       <footer className='mt-20 space-y-8 border-t pt-12'>
         {(prevArticle || nextArticle) && (
-          <div className='grid grid-cols-2 gap-4'>
-            <div>
-              {prevArticle && (
-                <Link
-                  href={`/articles/${prevArticle.id}`}
-                  className='group flex flex-col gap-1 rounded-xl border p-4 transition-all hover:border-primary/40 hover:shadow-sm'
-                >
-                  <span className='text-muted-foreground flex items-center gap-1 text-xs font-semibold tracking-wider uppercase'>
-                    <ChevronLeftIcon className='size-3.5' /> Previous
-                  </span>
-                  <span className='text-foreground line-clamp-2 text-sm font-medium group-hover:text-primary transition-colors'>
-                    {prevArticle.title}
-                  </span>
-                </Link>
-              )}
-            </div>
-            <div className='flex justify-end'>
-              {nextArticle && (
-                <Link
-                  href={`/articles/${nextArticle.id}`}
-                  className='group flex w-full flex-col items-end gap-1 rounded-xl border p-4 text-right transition-all hover:border-primary/40 hover:shadow-sm'
-                >
-                  <span className='text-muted-foreground flex items-center gap-1 text-xs font-semibold tracking-wider uppercase'>
-                    Next <ChevronRightIcon className='size-3.5' />
-                  </span>
-                  <span className='text-foreground line-clamp-2 text-sm font-medium group-hover:text-primary transition-colors'>
-                    {nextArticle.title}
-                  </span>
-                </Link>
-              )}
-            </div>
+          <div className='grid grid-cols-2 gap-3'>
+            {prevArticle ? (
+              <Link
+                href={`/articles/${prevArticle.id}`}
+                className='group flex flex-col gap-1 rounded-xl border p-3 transition-all hover:border-primary/40 hover:shadow-sm sm:p-4'
+              >
+                <span className='text-muted-foreground flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase'>
+                  <ChevronLeftIcon className='size-3' /> Previous
+                </span>
+                <span className='text-foreground line-clamp-2 text-xs font-medium transition-colors group-hover:text-primary sm:text-sm'>
+                  {prevArticle.title}
+                </span>
+              </Link>
+            ) : (
+              <div />
+            )}
+            {nextArticle ? (
+              <Link
+                href={`/articles/${nextArticle.id}`}
+                className='group flex flex-col items-end gap-1 rounded-xl border p-3 text-right transition-all hover:border-primary/40 hover:shadow-sm sm:p-4'
+              >
+                <span className='text-muted-foreground flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase'>
+                  Next <ChevronRightIcon className='size-3' />
+                </span>
+                <span className='text-foreground line-clamp-2 text-xs font-medium transition-colors group-hover:text-primary sm:text-sm'>
+                  {nextArticle.title}
+                </span>
+              </Link>
+            ) : (
+              <div />
+            )}
           </div>
         )}
 
