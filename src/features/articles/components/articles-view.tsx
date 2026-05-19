@@ -336,13 +336,13 @@ export function ArticlesView({
   );
 
   return (
-    <div className='space-y-8 pb-20'>
+    <div className='space-y-8 overflow-x-hidden pb-20'>
       {/* Header */}
       <div className='space-y-1'>
-        <h2 className='text-3xl font-bold tracking-tight md:text-5xl'>
+        <h2 className='text-2xl font-bold tracking-tight sm:text-3xl md:text-5xl'>
           Daily Intelligence
         </h2>
-        <p className='text-muted-foreground text-lg md:text-xl'>
+        <p className='text-muted-foreground text-base md:text-xl'>
           AI-curated insights on the trends that shape our future.
         </p>
       </div>
@@ -350,35 +350,35 @@ export function ArticlesView({
       {/* Unified generation card */}
       <Card className='border-primary/10 bg-muted/20 overflow-hidden border-2 shadow-lg backdrop-blur-sm'>
         <Tabs defaultValue='daily'>
-          <div className='border-b px-6 pt-4'>
-            <TabsList className='h-9 gap-1 bg-transparent p-0'>
+          <div className='border-b px-3 pt-3 sm:px-6 sm:pt-4'>
+            <TabsList className='h-9 w-full gap-1 bg-transparent p-0'>
               <TabsTrigger
                 value='daily'
-                className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-4 py-1.5 text-sm font-medium'
+                className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-2 py-1.5 text-sm font-medium sm:px-4'
               >
-                <SparklesIcon className='mr-1.5 size-3.5' />
-                Daily Feed
+                <SparklesIcon className='size-3.5 sm:mr-1.5' />
+                <span className='hidden sm:inline'>Daily Feed</span>
               </TabsTrigger>
               <TabsTrigger
                 value='system-design'
-                className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-4 py-1.5 text-sm font-medium'
+                className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-2 py-1.5 text-sm font-medium sm:px-4'
               >
-                <ServerIcon className='mr-1.5 size-3.5' />
-                System Design
+                <ServerIcon className='size-3.5 sm:mr-1.5' />
+                <span className='hidden sm:inline'>System Design</span>
               </TabsTrigger>
               <TabsTrigger
                 value='tier'
-                className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-4 py-1.5 text-sm font-medium'
+                className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-2 py-1.5 text-sm font-medium sm:px-4'
               >
-                <TrophyIcon className='mr-1.5 size-3.5' />
-                Tier Rankings
+                <TrophyIcon className='size-3.5 sm:mr-1.5' />
+                <span className='hidden sm:inline'>Tier Rankings</span>
               </TabsTrigger>
             </TabsList>
           </div>
 
           {/* Daily Feed tab */}
           <TabsContent value='daily' className='mt-0'>
-            <CardContent className='space-y-5 p-6'>
+            <CardContent className='space-y-5 p-4 sm:p-6'>
               <div className='flex flex-col gap-3 md:flex-row'>
                 <div className='relative flex-1'>
                   <Input
@@ -421,10 +421,11 @@ export function ArticlesView({
                       <Badge
                         key={interest.id}
                         variant='outline'
-                        className='bg-background hover:bg-primary/5 border-primary/20 cursor-pointer rounded-full px-3 py-1 text-sm font-medium shadow-sm transition-all'
+                        className='bg-background hover:bg-primary/5 border-primary/20 max-w-[180px] cursor-pointer rounded-full px-3 py-1 text-sm font-medium shadow-sm transition-all'
                         onClick={() => handleGenerateArticle(interest.name)}
+                        title={interest.name}
                       >
-                        {interest.name}
+                        <span className='truncate'>{interest.name}</span>
                       </Badge>
                     ))}
                   </div>
@@ -458,13 +459,13 @@ export function ArticlesView({
                         key={topic}
                         onClick={() => handleGenerateArticle(topic)}
                         disabled={isGenerating}
-                        className='bg-background flex items-center justify-center p-0'
+                        className='bg-background flex max-w-full items-center justify-center p-0'
                         containerClassName={cn(
-                          'h-9',
+                          'h-auto max-w-full',
                           isGenerating && 'opacity-50 cursor-not-allowed'
                         )}
                       >
-                        <span className='text-foreground px-3 py-1.5 text-sm font-medium'>
+                        <span className='text-foreground line-clamp-1 max-w-[260px] px-3 py-2 text-sm font-medium'>
                           {topic}
                         </span>
                       </HoverBorderGradient>
@@ -507,7 +508,7 @@ export function ArticlesView({
 
           {/* System Design tab */}
           <TabsContent value='system-design' className='mt-0'>
-            <CardContent className='space-y-5 p-6'>
+            <CardContent className='space-y-5 p-4 sm:p-6'>
               <div className='flex items-start justify-between gap-4'>
                 <p className='text-muted-foreground text-sm leading-relaxed'>
                   Deep-dive breakdowns covering functional requirements,
@@ -556,7 +557,7 @@ export function ArticlesView({
 
           {/* Tier Rankings tab */}
           <TabsContent value='tier' className='mt-0'>
-            <CardContent className='space-y-5 p-6'>
+            <CardContent className='space-y-5 p-4 sm:p-6'>
               <p className='text-muted-foreground text-sm leading-relaxed'>
                 Search for any ranked list — best products, local spots, tools,
                 or anything you want compared. Refreshed daily to stay current.
