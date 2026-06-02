@@ -256,21 +256,30 @@ export function WorkoutSessionView({
                       <div className='bg-muted flex size-8 shrink-0 items-center justify-center rounded text-xs font-black italic'>
                         {idx + 1}
                       </div>
-                      <div className='grid flex-1 grid-cols-2 gap-2'>
-                        <div className='relative'>
-                          <Input
-                            type='number'
-                            value={set.weight}
-                            onChange={(e) =>
-                              updateSet(set.id, 'weight', e.target.value)
-                            }
-                            className='h-10 pl-3'
-                            placeholder='0'
-                          />
-                          <span className='text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] font-bold uppercase'>
-                            kg
-                          </span>
-                        </div>
+                      <div
+                        className={cn(
+                          'grid flex-1 gap-2',
+                          ex.type === 'bodyweight'
+                            ? 'grid-cols-1'
+                            : 'grid-cols-2'
+                        )}
+                      >
+                        {ex.type !== 'bodyweight' && (
+                          <div className='relative'>
+                            <Input
+                              type='number'
+                              value={set.weight}
+                              onChange={(e) =>
+                                updateSet(set.id, 'weight', e.target.value)
+                              }
+                              className='h-10 pl-3'
+                              placeholder='0'
+                            />
+                            <span className='text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] font-bold uppercase'>
+                              kg
+                            </span>
+                          </div>
+                        )}
                         <div className='relative'>
                           <Input
                             type='number'
@@ -312,16 +321,23 @@ export function WorkoutSessionView({
                     <div className='text-muted-foreground/40 flex size-8 shrink-0 items-center justify-center'>
                       <PlusIcon className='size-4' />
                     </div>
-                    <div className='grid flex-1 grid-cols-2 gap-2'>
-                      <Input
-                        type='number'
-                        placeholder='Weight'
-                        value={pending.weight}
-                        onChange={(e) =>
-                          updatePending(ex.id, 'weight', e.target.value)
-                        }
-                        className='h-10 border-none bg-transparent shadow-none focus-visible:ring-0'
-                      />
+                    <div
+                      className={cn(
+                        'grid flex-1 gap-2',
+                        ex.type === 'bodyweight' ? 'grid-cols-1' : 'grid-cols-2'
+                      )}
+                    >
+                      {ex.type !== 'bodyweight' && (
+                        <Input
+                          type='number'
+                          placeholder='Weight'
+                          value={pending.weight}
+                          onChange={(e) =>
+                            updatePending(ex.id, 'weight', e.target.value)
+                          }
+                          className='h-10 border-none bg-transparent shadow-none focus-visible:ring-0'
+                        />
+                      )}
                       <Input
                         type='number'
                         placeholder='Reps'
@@ -329,6 +345,9 @@ export function WorkoutSessionView({
                         onChange={(e) =>
                           updatePending(ex.id, 'reps', e.target.value)
                         }
+                        onBlur={() => {
+                          if (pending.reps) handleAddSet(ex.id);
+                        }}
                         className='h-10 border-none bg-transparent shadow-none focus-visible:ring-0'
                       />
                     </div>
