@@ -4,6 +4,7 @@ import { PurchaseDialog } from './purchase-dialog';
 import { PurchaseCard } from './purchase-card';
 import { PurchaseCalendar } from './purchase-calendar';
 import { InventoryView } from './inventory-view';
+import { SuggestedPurchaseCard } from './purchase-suggestion-card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -14,6 +15,7 @@ import {
   LayoutListIcon
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { differenceInCalendarDays } from 'date-fns';
 import { sendNotification } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
 
@@ -67,6 +69,16 @@ export function PurchaseView({ purchases }: PurchaseViewProps) {
     );
   };
 
+  // Bought items whose dueDate is within 7 days — shown as ghost suggestions in "To Buy"
+  const getSuggestions = (cat: string) => {
+    const today = new Date();
+    return purchases.filter((p) => {
+      if (p.category !== cat || p.isBought !== 'true' || !p.dueDate) return false;
+      const diff = differenceInCalendarDays(new Date(p.dueDate), today);
+      return diff <= 7;
+    });
+  };
+
   const categories = [
     { id: 'Groceries', icon: ShoppingCartIcon },
     { id: 'Essentials', icon: PackageIcon }
@@ -74,8 +86,9 @@ export function PurchaseView({ purchases }: PurchaseViewProps) {
 
   const renderList = (catId: string, isBought: boolean) => {
     const items = filterItems(catId, isBought);
+    const suggestions = !isBought ? getSuggestions(catId) : [];
 
-    if (items.length === 0) {
+    if (items.length === 0 && suggestions.length === 0) {
       return (
         <div className='bg-muted/20 flex flex-col items-center justify-center rounded-xl border border-dashed p-12'>
           <p className='text-muted-foreground'>
@@ -93,10 +106,19 @@ export function PurchaseView({ purchases }: PurchaseViewProps) {
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
 
+    const sortedSuggestions = [...suggestions].sort((a, b) => {
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
+
     return (
       <div className='grid gap-3'>
         {sorted.map((item) => (
           <PurchaseCard key={item.id} purchase={item} />
+        ))}
+        {sortedSuggestions.map((item) => (
+          <SuggestedPurchaseCard key={`suggestion-${item.id}`} purchase={item} />
         ))}
       </div>
     );
@@ -160,7 +182,7 @@ export function PurchaseView({ purchases }: PurchaseViewProps) {
                           <ChevronRight className='size-4' />
                         )}
                         <h3 className='text-xs font-medium tracking-wider uppercase'>
-                          To Buy ({filterItems(cat.id, false).length})
+                          To Buy ({filterItems(cat.id, false).length + getSuggestions(cat.id).length})
                         </h3>
                       </button>
                       {toBuyExpanded && renderList(cat.id, false)}
