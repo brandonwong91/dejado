@@ -21,13 +21,17 @@ export async function createExerciseAction(data: {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
-  await db.insert(exercises).values({
-    userId,
-    name: data.name,
-    type: data.type
-  });
+  const [exercise] = await db
+    .insert(exercises)
+    .values({
+      userId,
+      name: data.name,
+      type: data.type
+    })
+    .returning();
 
   revalidatePath('/workouts');
+  return exercise;
 }
 
 export async function updateExerciseAction(
@@ -130,6 +134,32 @@ export async function deleteWorkoutAction(id: string) {
 
   await db.delete(workouts).where(eq(workouts.id, id));
   revalidatePath('/workouts');
+}
+
+export async function addExerciseToWorkoutAction(
+  workoutId: string,
+  exerciseId: string
+) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const existing = await db
+    .select({ exerciseId: workoutExercises.exerciseId })
+    .from(workoutExercises)
+    .where(eq(workoutExercises.workoutId, workoutId));
+
+  if (existing.some((row) => row.exerciseId === exerciseId)) {
+    return;
+  }
+
+  await db.insert(workoutExercises).values({
+    workoutId,
+    exerciseId,
+    order: String(existing.length)
+  });
+
+  revalidatePath('/workouts');
+  revalidatePath('/workouts/session/[sessionId]', 'page');
 }
 
 // Session Actions

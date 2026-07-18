@@ -6,7 +6,7 @@ import {
   exercises
 } from '@/db/schema';
 import { auth } from '@clerk/nextjs/server';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { notFound, redirect } from 'next/navigation';
 import { WorkoutSessionView } from '@/features/workouts/components/workout-session-view';
 import PageContainer from '@/components/layout/page-container';
@@ -64,11 +64,25 @@ export default async function WorkoutSessionPage({ params }: Props) {
         .orderBy(workoutExercises.order)
     : [];
 
+  // 4. Get all of the user's exercises, so existing ones can be added mid-session
+  const allExercises = await db
+    .select({
+      id: exercises.id,
+      name: exercises.name,
+      type: exercises.type,
+      bestScore: exercises.bestScore,
+      lastAttemptedAt: exercises.lastAttemptedAt
+    })
+    .from(exercises)
+    .where(eq(exercises.userId, userId))
+    .orderBy(desc(exercises.createdAt));
+
   return (
     <PageContainer scrollable={true}>
       <WorkoutSessionView
         workout={{ id: workout.id, name: workout.name }}
         exercises={routineExercises}
+        allExercises={allExercises}
         sessionId={sessionId}
       />
     </PageContainer>
