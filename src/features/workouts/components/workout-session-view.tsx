@@ -25,6 +25,7 @@ import { getProgressionTarget } from '../utils/progression';
 import { completeWorkoutSessionAction } from '../actions';
 import { sendNotification } from '@/lib/notifications';
 import { RestTimer } from './rest-timer';
+import { AddSessionExerciseDialog } from './add-session-exercise-dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -53,20 +54,29 @@ interface SetEntry {
 interface WorkoutSessionViewProps {
   workout: Workout;
   exercises: Exercise[];
+  allExercises: Exercise[];
   sessionId: string;
 }
 
 export function WorkoutSessionView({
   workout,
-  exercises,
+  exercises: initialExercises,
+  allExercises,
   sessionId
 }: WorkoutSessionViewProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [exercises, setExercises] = useState<Exercise[]>(initialExercises);
   const [sessionSets, setSessionSets] = useState<SetEntry[]>([]);
   const [pendingInputs, setPendingInputs] = useState<
     Record<string, { weight: string; reps: string }>
   >({});
+
+  const handleExerciseAdded = (exercise: Exercise) => {
+    setExercises((prev) =>
+      prev.some((ex) => ex.id === exercise.id) ? prev : [...prev, exercise]
+    );
+  };
 
   const handleAddSet = (exerciseId: string) => {
     const input = pendingInputs[exerciseId] || { weight: '', reps: '' };
@@ -364,6 +374,13 @@ export function WorkoutSessionView({
             </Card>
           );
         })}
+
+        <AddSessionExerciseDialog
+          workoutId={workout.id}
+          allExercises={allExercises}
+          sessionExerciseIds={exercises.map((ex) => ex.id)}
+          onAdded={handleExerciseAdded}
+        />
       </div>
 
       <RestTimer />
