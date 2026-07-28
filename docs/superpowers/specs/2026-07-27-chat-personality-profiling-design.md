@@ -126,6 +126,140 @@ page, and Mirror Mode.
 
 ---
 
+## Flow Diagrams
+
+### Figure 1 — End to end
+
+```mermaid
+flowchart TB
+    U["User sends a message"]
+    API["/api/chat<br/>auth · session · persist"]
+    T0["Tier 0 — deterministic<br/>lengths · punctuation · emoji<br/>pronouns · latency · hour"]
+    MSG[("chat_messages")]
+    RED["Redaction pass<br/>emails · phones · card digits"]
+    T1["Tier 1 — batched LLM<br/>~20 messages per call<br/>topics · sentiment · goals"]
+    TOP[("user_topics")]
+    ROLL["Nightly rollup"]
+    SNAP[("profile_snapshots")]
+    INS["Insights page"]
+    STR["Conversation starters"]
+    PER["Mirror persona"]
+
+    U --> API --> T0 --> MSG
+    MSG --> RED --> T1 --> TOP
+    MSG --> ROLL
+    TOP --> ROLL
+    ROLL --> SNAP
+    SNAP --> INS
+    SNAP --> STR
+    SNAP --> PER
+    STR -. "tap a starter" .-> U
+```
+
+Tier 0 runs in-request as a pure function — no network, no cost, no text leaving the
+server. Tier 1 is the only per-message cost, batched ~20:1 and running after the reply has
+already streamed so it stays out of the user's latency path. Redaction sits before Tier 1
+rather than before storage: the stored row keeps raw text, only the copy sent for tagging
+is stripped.
+
+### Figure 2 — One request
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Chat panel
+    participant A as /api/chat
+    participant D as Neon · Drizzle
+    participant L as Pollinations
+
+    P->>A: text + conversationId + mode
+    A->>A: auth() — 401 if anonymous
+    A->>D: read profile_settings
+    Note over A,D: profiling off → reply only,<br/>nothing is stored
+    A->>A: computeMessageMetrics() — Tier 0
+    A->>D: insert user message + metrics
+    A->>L: streamText()
+    L-->>P: tokens stream into the panel
+    L-->>A: onFinish
+    A->>D: insert assistant message
+    A->>D: bump messageCount · lastMessageAt
+    A-)A: enqueue for Tier 1 enrichment
+```
+
+The user message is written before the model is called, so an abandoned or failed stream
+still leaves a complete record. Consent is checked per request rather than assumed at
+signup — with profiling off the route behaves exactly as it does today.
+
+### Figure 3 — Nightly rollup
+
+```mermaid
+flowchart TB
+    CR["GET /api/profile/rollup"]
+    SEL{"users with messages newer<br/>than their last snapshot"}
+    SKIP["skip — nothing to do"]
+    DEC["Recompute topic scores<br/>30-day half-life decay"]
+    AGG["Aggregate Tier 0<br/>trailing 90 days"]
+    GATE{"≥ 50 messages<br/>across ≥ 7 days?"}
+    TOPIC["Topics and style only<br/>no traits inferred"]
+    INF["One LLM call — aggregates<br/>+ 40-message sample<br/>Big Five with evidence,<br/>'unknown' permitted"]
+    SNAP[("write profile_snapshots<br/>one row per user per day")]
+    PC["Recompile Mirror persona"]
+    GEN["Generate next starters"]
+
+    CR --> SEL
+    SEL -- none --> SKIP
+    SEL -- per user --> DEC
+    DEC --> AGG --> GATE
+    GATE -- no --> TOPIC --> SNAP
+    GATE -- yes --> INF --> SNAP
+    SNAP --> PC
+    SNAP --> GEN
+```
+
+The gate is the load-bearing box. Snapshots are immutable and dated, which is what makes
+the drift timeline possible. Only users with new messages are processed, keeping nightly
+cost proportional to activity rather than to signups.
+
+### Figure 4 — Surfaces and the exclusion guard
+
+```mermaid
+flowchart TB
+    SNAP[("profile_snapshots<br/>user_topics")]
+    IP["Insights page<br/>cloud · radar · fingerprint · drift"]
+    ST["Starters — 7 kinds, ranked<br/>14-day anchor cooldown"]
+    MP["Mirror persona<br/>identity · interests · voice<br/>exemplars · epistemics"]
+
+    S1["Empty-state chips"]
+    S2["Lull card, ~90s idle"]
+    S3["Daily check-in line"]
+
+    MC["Mirror-mode chat"]
+    MSG[("chat_messages")]
+    GUARD{"every profiling query<br/>WHERE mode = 'assistant'"}
+    PIPE["Tier 1 · rollup · topics · starters"]
+    DROP["mirror rows dropped —<br/>the model never<br/>re-profiles its own imitation"]
+
+    SNAP --> IP
+    SNAP --> ST
+    SNAP --> MP
+    ST --> S1
+    ST --> S2
+    ST --> S3
+    MP --> MC
+    MC -- "mode = mirror" --> MSG
+    S1 -- "mode = assistant" --> MSG
+    MSG --> GUARD
+    GUARD -- passes --> PIPE
+    GUARD -- filtered --> DROP
+    PIPE --> SNAP
+```
+
+Without the guard the feature eats itself: mirror output is a model's imitation of the
+user, and profiling it makes the next persona an imitation of an imitation, drifting
+further each night with nothing in the UI to show it happened.
+
+---
+
 ## Data Model
 
 New tables in `src/db/schema.ts`. All follow existing repo conventions: `uuid` PKs,
