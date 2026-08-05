@@ -370,8 +370,8 @@ Feed / Games / Fortune.
 
 **Sections, top to bottom:**
 
-1. **Profile strength** — messages analyzed, days observed, confidence meter, and what
-   unlocks next. Below the gate this is the whole page plus topics.
+1. **Profile strength** — the metric row. Detailed below; it is the page's disclosure
+   surface, and below the gate it is the whole page apart from topics.
 2. **Topic cloud** — the headline visual. Font size scales with decayed `score`, colour by
    category. Click a topic → side panel: first mentioned, sentiment trend sparkline,
    related topics, 3 sample messages ("why we think this"), and pin / mute controls.
@@ -387,6 +387,54 @@ Feed / Games / Fortune.
    "Talk to your mirror".
 7. **Data controls** — pause profiling, retention window, delete raw messages while keeping
    aggregates, delete everything, export JSON.
+
+### Profile strength — the metric row
+
+This row is the feature's disclosure surface. Its job is to answer "what do you know about
+me, and how sure are you?" before the user scrolls into anything inferred. It should read
+as honestly when it is empty as when it is full, so it is specified at three states:
+profiling off (the default), below the evidence gate, and established.
+
+Card idiom follows the existing dashboard grid in `src/app/dashboard/overview/layout.tsx` —
+`Card` → `CardHeader` with `CardDescription` label and a right-aligned icon → `CardTitle`
+as a large `tabular-nums` figure → `CardAction` badge → muted `CardFooter` context line.
+
+**Primary row — four cards:**
+
+| Card | Source | Footer line | At zero |
+|------|--------|-------------|---------|
+| Messages analyzed | `count(chat_messages)` where `role='user'`, `mode='assistant'`, `enriched_at not null` | "of N captured" — exposes enrichment lag rather than hiding it | 0, "starts once you chat" |
+| Days observed | `count(distinct date(created_at))` | "since {firstSeen}" | 0 of 7 — gate progress |
+| Topics tracked | `count(user_topics)` where `status='active'` | "N new this week · N dormant" | seeded from the existing `interests` table |
+| Profile confidence | derived, see below | band label; the percentage is secondary | "—", "not enough evidence yet" |
+
+**Strength strip** — beneath the cards, four segments (Topics, Style fingerprint,
+Personality traits, Mirror Mode) showing what is unlocked, what is next, and one plain
+sentence naming exactly what would unlock it: *"27 more messages across 3 more days
+unlocks personality traits."*
+
+**System state row — three smaller cards:** last rollup and next run; traits inferred
+("4 of 5 — agreeableness still unknown", naming the gap explicitly); mirror readiness with
+the message count backing the persona.
+
+**Confidence formula:**
+
+```
+volume    = min(1, analyzedMessages / 200)
+breadth   = min(1, daysObserved / 30)
+coverage  = traitsWithEvidence / 5
+stability = 1 - meanAbsDelta(traits, last 3 snapshots)
+
+confidence = 0.35·volume + 0.25·breadth + 0.20·coverage + 0.20·stability
+```
+
+Displayed as a band — Building / Fair / Strong — with the percentage secondary. A bare
+percentage invites reading it as accuracy, which it is not: it measures how much evidence
+the profile rests on, not how right it is.
+
+`stability` is the term that earns its place. Volume and breadth only report that the
+system saw a lot. Stability reports that the conclusions stopped moving between nightly
+snapshots — the only one of the four that degrades when the profile is wrong and thrashing.
 
 ### Word cloud implementation
 

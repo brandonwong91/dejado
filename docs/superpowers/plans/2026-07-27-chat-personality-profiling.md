@@ -28,6 +28,7 @@ Pollinations (`gen.pollinations.ai/v1`), recharts, Zustand, shadcn/ui.
 | Create | `src/features/chat-profile/utils/metrics.ts` — Tier 0, pure |
 | Create | `src/features/chat-profile/utils/redact.ts` |
 | Create | `src/features/chat-profile/utils/decay.ts` |
+| Create | `src/features/chat-profile/utils/confidence.ts` |
 | Create | `src/features/chat-profile/schemas/index.ts` — Zod for LLM output |
 | Create | `src/features/chat-profile/actions/messages.ts` |
 | Create | `src/features/chat-profile/actions/enrich.ts` |
@@ -127,8 +128,15 @@ commit.
 - [ ] **Task 1.4 — Insights page skeleton**
 
   `/profile/insights` server component → `insights-view.tsx`. Add the nav entry under the
-  AI group in `nav-config.ts` (`shortcut: ['a','y']`). Add `profile-strength.tsx` with the
-  gate (≥ 50 messages, ≥ 7 days) and the "what unlocks next" copy.
+  AI group in `nav-config.ts` (`shortcut: ['a','y']`).
+
+  `profile-strength.tsx` implements the metric row per the design's "Profile strength"
+  section: four cards reusing the dashboard idiom from
+  `src/app/dashboard/overview/layout.tsx`, the four-segment strength strip with the
+  "what unlocks next" sentence, and the three system-state cards. Build all three states —
+  profiling off, below gate, established — since the off state is the default every new
+  user sees. `confidence` and its band live in `utils/confidence.ts` so the same function
+  backs the card and the rollup.
 
 - [ ] **Task 1.5 — Topic cloud**
 
