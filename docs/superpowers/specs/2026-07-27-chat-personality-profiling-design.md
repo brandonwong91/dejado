@@ -436,6 +436,12 @@ the profile rests on, not how right it is.
 system saw a lot. Stability reports that the conclusions stopped moving between nightly
 snapshots — the only one of the four that degrades when the profile is wrong and thrashing.
 
+At 0.2 of the weighted value, stability cannot on its own pull a high-volume profile down
+a band: a profile whose traits swing 0.9 night to night still scores 0.78, which would
+otherwise display as "Strong". The band is therefore clamped separately — mean trait
+movement above 0.15 caps the display at "Building" regardless of the score. Volume must
+not be able to buy confidence that the readings have not earned.
+
 ### Word cloud implementation
 
 No cloud library is in `package.json`. Recommendation: **hand-roll a flex-wrap tag cloud**

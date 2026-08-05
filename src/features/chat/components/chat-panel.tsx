@@ -16,14 +16,20 @@ import {
   PromptInputActions,
   PromptInputTextarea
 } from '@/components/prompt-kit/prompt-input';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useUser } from '@clerk/nextjs';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { AlertTriangle, ArrowUp, Copy, X } from 'lucide-react';
-import { memo, useState } from 'react';
+import { AlertTriangle, ArrowUp, Copy, Sparkles, X } from 'lucide-react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { getMyProfileSettingsAction } from '@/features/chat-profile/actions/settings';
+import { getRecentConversationAction } from '@/features/chat-profile/actions/messages';
+import type { Starter } from '@/features/chat-profile/actions/starters';
+import ConsentCard from '@/features/chat-profile/components/consent-card';
+import StarterChips from '@/features/chat-profile/components/starter-chips';
 import { useChatPanel } from '../store';
 
 type MessageComponentProps = {
@@ -107,48 +113,157 @@ const ErrorMessage = memo(({ error }: { error: Error }) => (
 ErrorMessage.displayName = 'ErrorMessage';
 
 export default function ChatPanel() {
-  const { close } = useChatPanel();
+  const { close, mode, setMode, conversationId, setConversationId } =
+    useChatPanel();
   const { user } = useUser();
   const [input, setInput] = useState('');
+  const [consented, setConsented] = useState<boolean | null>(null);
+  const [mirrorAvailable, setMirrorAvailable] = useState(false);
+  const [backfilled, setBackfilled] = useState(false);
+  const pendingStarterId = useRef<string | null>(null);
+  const conversationIdRef = useRef<string | null>(conversationId);
 
-  const { messages, sendMessage, status, error } = useChat({
-    transport: new DefaultChatTransport({ api: '/api/chat' })
+  conversationIdRef.current = conversationId;
+
+  const { messages, setMessages, sendMessage, status, error } = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/chat',
+      // Read through a ref so a conversation created by the server on the first
+      // turn is picked up by the second without re-creating the transport.
+      prepareSendMessagesRequest: ({ messages: body }) => ({
+        body: {
+          messages: body,
+          conversationId: conversationIdRef.current ?? undefined,
+          mode,
+          starterId: pendingStarterId.current ?? undefined
+        }
+      })
+    })
   });
+
+  const loadSettings = useCallback(() => {
+    getMyProfileSettingsAction()
+      .then((s) => {
+        setConsented(s.consented);
+        setMirrorAvailable(s.mirrorEnabled);
+      })
+      .catch(() => setConsented(true));
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  // Rehydrate the current thread so chat survives a reload.
+  useEffect(() => {
+    let cancelled = false;
+    setBackfilled(false);
+    getRecentConversationAction(mode)
+      .then((recent) => {
+        if (cancelled || !recent) {
+          setBackfilled(true);
+          return;
+        }
+        setConversationId(recent.conversationId);
+        setMessages(
+          recent.messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            parts: [{ type: 'text' as const, text: m.content }]
+          }))
+        );
+        setBackfilled(true);
+      })
+      .catch(() => setBackfilled(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, setMessages, setConversationId]);
+
+  const send = (text: string, starterId?: string) => {
+    pendingStarterId.current = starterId ?? null;
+    sendMessage({ text });
+    pendingStarterId.current = null;
+  };
 
   const handleSubmit = () => {
     if (!input.trim()) return;
-    sendMessage({ text: input });
+    send(input);
     setInput('');
   };
 
+  const handleStarter = (starter: Starter) => {
+    send(starter.text, starter.id);
+  };
+
+  const isMirror = mode === 'mirror';
   const firstName = user?.firstName ?? 'there';
 
   return (
     <div className='flex h-full flex-col border-l'>
-      <div className='flex h-12 shrink-0 items-center justify-between border-b px-3'>
-        <span className='text-sm font-semibold'>AI Assistant</span>
-        <Button
-          variant='ghost'
-          size='icon'
-          className='size-7'
-          onClick={close}
-          aria-label='Close chat'
-        >
-          <X className='size-4' />
-        </Button>
+      <div
+        className={cn(
+          'flex h-12 shrink-0 items-center justify-between border-b px-3',
+          isMirror && 'bg-primary/5'
+        )}
+      >
+        <div className='flex min-w-0 items-center gap-2'>
+          <span className='truncate text-sm font-semibold'>
+            {isMirror ? 'Mirror' : 'AI Assistant'}
+          </span>
+          {isMirror ? (
+            <Badge variant='outline' className='shrink-0 gap-1'>
+              <Sparkles className='size-3' />a model of you
+            </Badge>
+          ) : null}
+        </div>
+        <div className='flex shrink-0 items-center gap-1'>
+          {mirrorAvailable ? (
+            <Button
+              variant='ghost'
+              size='icon'
+              className={cn('size-7', isMirror && 'text-primary')}
+              onClick={() => setMode(isMirror ? 'assistant' : 'mirror')}
+              aria-label={isMirror ? 'Switch to assistant' : 'Switch to mirror'}
+              title={isMirror ? 'Switch to assistant' : 'Switch to Mirror Mode'}
+            >
+              <Sparkles className='size-4' />
+            </Button>
+          ) : null}
+          <Button
+            variant='ghost'
+            size='icon'
+            className='size-7'
+            onClick={close}
+            aria-label='Close chat'
+          >
+            <X className='size-4' />
+          </Button>
+        </div>
       </div>
 
       <ChatContainerRoot className='relative min-h-0 flex-1 overflow-y-auto'>
         <ChatContainerContent className='space-y-6 px-2 py-4'>
-          {messages.length === 0 && (
-            <div className='flex flex-col gap-1 px-2 pt-2'>
-              <p className='text-foreground text-sm font-medium'>
-                Hey {firstName}! 👋
-              </p>
-              <p className='text-muted-foreground text-sm'>
-                I&apos;m your AI assistant. Ask me anything — I&apos;m here to
-                help.
-              </p>
+          {messages.length === 0 && backfilled && (
+            <div className='flex flex-col gap-3 px-2 pt-2'>
+              <div className='flex flex-col gap-1'>
+                <p className='text-foreground text-sm font-medium'>
+                  {isMirror ? `You, more or less` : `Hey ${firstName}! 👋`}
+                </p>
+                <p className='text-muted-foreground text-sm'>
+                  {isMirror
+                    ? 'This is a persona built from how you write. It is a model of you, not you — it will say when it does not know something rather than invent it.'
+                    : "I'm your AI assistant. Ask me anything — I'm here to help."}
+                </p>
+              </div>
+
+              {consented === false ? (
+                <ConsentCard onDecided={loadSettings} />
+              ) : null}
+
+              {!isMirror && consented ? (
+                <StarterChips onPick={handleStarter} />
+              ) : null}
             </div>
           )}
           {messages.map((message, index) => (
