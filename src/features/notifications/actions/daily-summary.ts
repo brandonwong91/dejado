@@ -6,7 +6,8 @@ import {
   purchases,
   workouts,
   workoutSessions,
-  dailySummaries
+  dailySummaries,
+  conversationStarters
 } from '@/db/schema';
 import { auth } from '@clerk/nextjs/server';
 import { eq, and, desc, isNotNull, lte } from 'drizzle-orm';
@@ -159,6 +160,21 @@ async function generateSummaryForUser(
       parts.push(`💪 ${pick.name} · ${restLabel}`);
     }
   }
+
+  // ── 💬 One conversation starter, if the profile has produced any ──────────
+  const [starter] = await db
+    .select({ text: conversationStarters.text })
+    .from(conversationStarters)
+    .where(
+      and(
+        eq(conversationStarters.userId, userId),
+        eq(conversationStarters.status, 'pending')
+      )
+    )
+    .orderBy(desc(conversationStarters.createdAt))
+    .limit(1);
+
+  if (starter) parts.push(`💬 ${starter.text}`);
 
   // Nothing actionable today — skip creating a record
   if (parts.length === 0) return;

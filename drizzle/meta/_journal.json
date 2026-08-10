@@ -22,6 +22,13 @@
       "when": 1778225196698,
       "tag": "0002_hard_satana",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785933855572,
+      "tag": "0003_uneven_hedge_knight",
+      "breakpoints": true
     }
   ]
 }

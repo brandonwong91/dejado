@@ -96,6 +96,12 @@ export const navItems: NavItem[] = [
         url: '/ai/fortune',
         icon: 'fortune',
         shortcut: ['a', 'f']
+      },
+      {
+        title: 'Your profile',
+        url: '/profile/insights',
+        icon: 'fingerprint',
+        shortcut: ['a', 'y']
       }
     ]
   },
