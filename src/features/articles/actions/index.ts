@@ -481,27 +481,23 @@ Be specific, factual, and use real products/places/items. Include relevant detai
   return newArticle;
 }
 
-export async function refreshTierRankingsAction() {
-  const tierArticles = await db
-    .select()
-    .from(articles)
-    .where(and(eq(articles.seriesType, 'tier'), isNotNull(articles.tierQuery)));
+type TierArticleRow = typeof articles.$inferSelect;
 
-  const results: Array<{
-    id: string;
-    tierQuery: string | null;
-    isStillValid: boolean;
-  }> = [];
+/**
+ * Re-checks a single ranked list against the present day. Writes back the
+ * refreshed content and records *whether the rankings actually moved* — that
+ * distinction is what drives the "needs review" indicator in the UI. A plain
+ * re-verification only bumps `lastValidatedAt`; a real change also stamps
+ * `lastChangedAt` and stores a short summary of what shifted.
+ */
+async function validateTierArticle(article: TierArticleRow) {
+  const today = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
-  for (const article of tierArticles) {
-    try {
-      const today = new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-
-      const validationPrompt = `Today is ${today}.
+  const validationPrompt = `Today is ${today}.
 
 I have a ranked list article for the query: "${article.tierQuery}"
 
@@ -516,49 +512,132 @@ Is this ranked list still accurate and up-to-date? Consider:
 Return ONLY a raw JSON object (no markdown code blocks):
 {
   "isStillValid": boolean,
-  "updatedContent": string
+  "updatedContent": string,
+  "changeSummary": string
 }
 
 Rules:
-- If still valid: set isStillValid to true, return the same content but update the "Last verified" date to ${today}
-- If outdated: set isStillValid to false, return fully revised content with updated rankings and new "Last verified: ${today}" date
+- If still valid: set isStillValid to true, return the same content but update the "Last verified" date to ${today}, and set changeSummary to an empty string
+- If outdated: set isStillValid to false, return fully revised content with updated rankings and new "Last verified: ${today}" date, and set changeSummary to one short sentence naming what moved (e.g. "The Pixel 10 Pro launched and takes the #2 spot, pushing the S25 Ultra to #3")
 - Always preserve the same markdown structure (Ranking Criteria, The Rankings, Quick Comparison, Bottom Line sections)`;
 
-      const rawResponse = await callPollinations(validationPrompt, true);
+  const rawResponse = await callPollinations(validationPrompt, true);
 
-      let validationData: { isStillValid: boolean; updatedContent: string };
-      try {
-        validationData = JSON.parse(
-          rawResponse.replace(/```json|```/g, '').trim()
-        );
-      } catch {
-        validationData = {
-          isStillValid: true,
-          updatedContent: article.content
-        };
-      }
+  let validationData: {
+    isStillValid: boolean;
+    updatedContent: string;
+    changeSummary?: string;
+  };
+  try {
+    validationData = JSON.parse(rawResponse.replace(/```json|```/g, '').trim());
+  } catch {
+    validationData = {
+      isStillValid: true,
+      updatedContent: article.content
+    };
+  }
 
-      const now = new Date();
-      await db
-        .update(articles)
-        .set({
-          content: validationData.updatedContent || article.content,
-          lastValidatedAt: now,
-          updatedAt: now
-        })
-        .where(eq(articles.id, article.id));
+  const updatedContent = validationData.updatedContent || article.content;
+  // Only treat it as a change when the model says so *and* the body really moved —
+  // a refreshed "Last verified" line alone is not something worth reviewing.
+  const strip = (s: string) => s.replace(/\*Last verified:.*\*/g, '').trim();
+  const hasChanged =
+    validationData.isStillValid === false &&
+    strip(updatedContent) !== strip(article.content);
 
-      results.push({
-        id: article.id,
-        tierQuery: article.tierQuery,
-        isStillValid: validationData.isStillValid
-      });
+  const now = new Date();
+  const [updated] = await db
+    .update(articles)
+    .set({
+      content: updatedContent,
+      lastValidatedAt: now,
+      updatedAt: now,
+      ...(hasChanged
+        ? {
+            lastChangedAt: now,
+            updateSummary:
+              validationData.changeSummary?.trim() ||
+              'The rankings shifted since this list was generated.'
+          }
+        : {})
+    })
+    .where(eq(articles.id, article.id))
+    .returning();
+
+  return {
+    id: article.id,
+    tierQuery: article.tierQuery,
+    isStillValid: !hasChanged,
+    hasChanged,
+    article: updated
+  };
+}
+
+export async function refreshTierRankingsAction() {
+  const tierArticles = await db
+    .select()
+    .from(articles)
+    .where(and(eq(articles.seriesType, 'tier'), isNotNull(articles.tierQuery)));
+
+  const results: Array<{
+    id: string;
+    tierQuery: string | null;
+    isStillValid: boolean;
+    hasChanged: boolean;
+  }> = [];
+
+  for (const article of tierArticles) {
+    try {
+      const { id, tierQuery, isStillValid, hasChanged } =
+        await validateTierArticle(article);
+      results.push({ id, tierQuery, isStillValid, hasChanged });
     } catch (err) {
       console.error(`Failed to refresh tier article ${article.id}:`, err);
     }
   }
 
+  revalidatePath('/articles');
   return results;
+}
+
+/** On-demand freshness check for a single ranked list the user owns. */
+export async function refreshTierArticleAction(id: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const [article] = await db
+    .select()
+    .from(articles)
+    .where(and(eq(articles.id, id), eq(articles.userId, userId)));
+
+  if (!article) throw new Error('Article not found');
+  if (article.seriesType !== 'tier')
+    throw new Error('Only ranked lists can be refreshed');
+
+  const { article: updated, hasChanged } = await validateTierArticle(article);
+
+  revalidatePath('/articles');
+  revalidatePath(`/articles/${id}`);
+  return { article: updated, hasChanged };
+}
+
+/** Acknowledges a ranking change so the list drops out of "needs review". */
+export async function markTierArticleReviewedAction(id: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const now = new Date();
+  const [updated] = await db
+    .update(articles)
+    .set({ reviewedAt: now })
+    .where(and(eq(articles.id, id), eq(articles.userId, userId)))
+    .returning();
+
+  if (!updated) throw new Error('Article not found');
+
+  revalidatePath('/articles');
+  revalidatePath(`/articles/${id}`);
+  return updated;
 }
 
 export async function getGlobalTrendingTopicsAction() {

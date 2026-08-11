@@ -1,23 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-type GlobalTrendsStore = {
-  trends: string[];
-  userId: string | null;
-  setTrends: (trends: string[], userId: string | null) => void;
-};
-
-export const useGlobalTrendsStore = create<GlobalTrendsStore>()(
-  persist(
-    (set) => ({
-      trends: [],
-      userId: null,
-      setTrends: (trends, userId) => set({ trends, userId })
-    }),
-    { name: 'global-trends' }
-  )
-);
-
 type BlocklistItem = { id: string; topic: string };
 
 type FeedPreferencesStore = {
@@ -27,7 +10,9 @@ type FeedPreferencesStore = {
   setAutoGenerate: (enabled: boolean) => void;
   addToBlocklist: (topic: string) => void;
   removeFromBlocklist: (id: string) => void;
-  setWeights: (weights: Partial<{ interests: number; trends: number; lists: number }>) => void;
+  setWeights: (
+    weights: Partial<{ interests: number; trends: number; lists: number }>
+  ) => void;
 };
 
 export const useFeedPreferencesStore = create<FeedPreferencesStore>()(
@@ -41,7 +26,10 @@ export const useFeedPreferencesStore = create<FeedPreferencesStore>()(
         set((state) => ({
           blocklist: [
             ...state.blocklist,
-            { id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`, topic }
+            {
+              id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+              topic
+            }
           ]
         })),
       removeFromBlocklist: (id) =>
