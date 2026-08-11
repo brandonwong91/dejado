@@ -17,13 +17,20 @@ import {
   TrophyIcon,
   CheckCircle2Icon,
   RefreshCwIcon,
+  AlertCircleIcon,
   Trash2Icon,
   ChevronLeftIcon,
   ChevronRightIcon
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
-import { toggleArticlePublicAction, deleteArticleAction } from '../actions';
+import {
+  toggleArticlePublicAction,
+  deleteArticleAction,
+  refreshTierArticleAction,
+  markTierArticleReviewedAction
+} from '../actions';
+import { needsReview } from '../utils/tier-status';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { MermaidDiagram } from '@/components/ui/mermaid-diagram';
@@ -51,6 +58,9 @@ interface Article {
   seriesType: string | null;
   tierQuery: string | null;
   lastValidatedAt: Date | null;
+  lastChangedAt: Date | null;
+  updateSummary: string | null;
+  reviewedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -77,6 +87,47 @@ export function ArticleDetailsView({
   const [article, setArticle] = useState<Article>(initialArticle);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRefreshingTier, setIsRefreshingTier] = useState(false);
+  const [isMarkingReviewed, setIsMarkingReviewed] = useState(false);
+
+  const isTier = article.seriesType === 'tier';
+  const showReviewBanner = isTier && needsReview(article);
+
+  const handleRefreshTier = async () => {
+    setIsRefreshingTier(true);
+    const toastId = toast.loading('Checking this list against today...');
+    try {
+      const { article: updated, hasChanged } = await refreshTierArticleAction(
+        article.id
+      );
+      setArticle(updated as Article);
+      toast.success(
+        hasChanged
+          ? 'The rankings changed — the list has been updated.'
+          : 'Still accurate. Nothing changed.',
+        { id: toastId }
+      );
+    } catch {
+      toast.error('Failed to check this list. Please try again.', {
+        id: toastId
+      });
+    } finally {
+      setIsRefreshingTier(false);
+    }
+  };
+
+  const handleMarkReviewed = async () => {
+    setIsMarkingReviewed(true);
+    try {
+      const updated = await markTierArticleReviewedAction(article.id);
+      setArticle(updated as Article);
+      toast.success('Marked as reviewed');
+    } catch {
+      toast.error('Failed to mark as reviewed');
+    } finally {
+      setIsMarkingReviewed(false);
+    }
+  };
 
   const togglePublic = async () => {
     setIsUpdating(true);
@@ -494,8 +545,8 @@ export function ArticleDetailsView({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete this article?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This action cannot be undone. The article will be permanently
-                    deleted.
+                    This action cannot be undone. The article will be
+                    permanently deleted.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -521,19 +572,25 @@ export function ArticleDetailsView({
           >
             {article.topic || 'Trending Insight'}
           </Badge>
-          {article.seriesType === 'tier' &&
-            article.lastValidatedAt &&
-            (() => {
-              const hoursSinceValidation =
-                (Date.now() - new Date(article.lastValidatedAt).getTime()) /
-                (1000 * 60 * 60);
-              return hoursSinceValidation < 24 ? (
+          {isTier &&
+            (showReviewBanner ? (
+              <Badge
+                variant='outline'
+                className='gap-1 border-amber-500/60 bg-amber-500/10 px-3 py-1 text-[10px] tracking-wider text-amber-700 uppercase dark:text-amber-400'
+              >
+                <AlertCircleIcon className='size-3' />
+                Rankings changed
+              </Badge>
+            ) : article.lastValidatedAt ? (
+              (Date.now() - new Date(article.lastValidatedAt).getTime()) /
+                (1000 * 60 * 60) <
+              24 ? (
                 <Badge
                   variant='outline'
                   className='gap-1 border-emerald-500/50 px-3 py-1 text-[10px] tracking-wider text-emerald-600 uppercase dark:text-emerald-400'
                 >
                   <CheckCircle2Icon className='size-3' />
-                  List updated today
+                  Verified today
                 </Badge>
               ) : (
                 <Badge
@@ -546,8 +603,8 @@ export function ArticleDetailsView({
                     addSuffix: true
                   })}
                 </Badge>
-              );
-            })()}
+              )
+            ) : null)}
           <div className='text-muted-foreground flex items-center gap-1.5 text-xs font-medium'>
             <ClockIcon className='size-3.5' /> 2 min read
           </div>
@@ -583,7 +640,73 @@ export function ArticleDetailsView({
         </div>
       </header>
 
-      <article className='prose prose-neutral dark:prose-invert max-w-none overflow-x-hidden sm:prose-lg md:px-8'>
+      {/* Ranked list maintenance — what changed and how to clear the flag */}
+      {isTier && (
+        <div
+          className={
+            showReviewBanner
+              ? 'mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3'
+              : 'text-muted-foreground mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-xl border px-4 py-3'
+          }
+        >
+          <div className='min-w-0 flex-1 text-sm'>
+            {showReviewBanner ? (
+              <>
+                <p className='font-semibold text-amber-800 dark:text-amber-300'>
+                  This ranking changed
+                  {article.lastChangedAt
+                    ? ` ${formatDistanceToNow(new Date(article.lastChangedAt), {
+                        addSuffix: true
+                      })}`
+                    : ''}
+                </p>
+                <p className='mt-0.5 text-amber-800/80 dark:text-amber-300/80'>
+                  {article.updateSummary ??
+                    'The daily check found the rankings are no longer what they were.'}
+                </p>
+              </>
+            ) : (
+              <p className='text-xs'>
+                {article.lastValidatedAt
+                  ? `Re-checked ${formatDistanceToNow(
+                      new Date(article.lastValidatedAt),
+                      { addSuffix: true }
+                    )} — the rankings still hold.`
+                  : 'This list has not been re-checked yet.'}
+              </p>
+            )}
+          </div>
+          <div className='flex shrink-0 items-center gap-2'>
+            {isOwner && (
+              <Button
+                variant='outline'
+                size='sm'
+                className='h-8 gap-1.5 text-xs'
+                onClick={handleRefreshTier}
+                disabled={isRefreshingTier}
+              >
+                <RefreshCwIcon
+                  className={`size-3.5 ${isRefreshingTier ? 'animate-spin' : ''}`}
+                />
+                Check now
+              </Button>
+            )}
+            {isOwner && showReviewBanner && (
+              <Button
+                size='sm'
+                className='h-8 gap-1.5 bg-amber-600 text-xs text-white hover:bg-amber-700'
+                onClick={handleMarkReviewed}
+                disabled={isMarkingReviewed}
+              >
+                <CheckCircle2Icon className='size-3.5' />
+                Mark reviewed
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <article className='prose prose-neutral dark:prose-invert sm:prose-lg max-w-none overflow-x-hidden md:px-8'>
         {article.summary && (
           <div className='bg-muted/30 border-primary text-foreground mb-8 rounded-r-xl border-l-4 p-4 text-sm leading-relaxed italic sm:mb-12 sm:p-6 sm:text-lg'>
             &ldquo;{article.summary}&rdquo;
@@ -598,12 +721,12 @@ export function ArticleDetailsView({
             {prevArticle ? (
               <Link
                 href={`/articles/${prevArticle.id}`}
-                className='group flex flex-col gap-1 rounded-xl border p-3 transition-all hover:border-primary/40 hover:shadow-sm sm:p-4'
+                className='group hover:border-primary/40 flex flex-col gap-1 rounded-xl border p-3 transition-all hover:shadow-sm sm:p-4'
               >
                 <span className='text-muted-foreground flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase'>
                   <ChevronLeftIcon className='size-3' /> Previous
                 </span>
-                <span className='text-foreground line-clamp-2 text-xs font-medium transition-colors group-hover:text-primary sm:text-sm'>
+                <span className='text-foreground group-hover:text-primary line-clamp-2 text-xs font-medium transition-colors sm:text-sm'>
                   {prevArticle.title}
                 </span>
               </Link>
@@ -613,12 +736,12 @@ export function ArticleDetailsView({
             {nextArticle ? (
               <Link
                 href={`/articles/${nextArticle.id}`}
-                className='group flex flex-col items-end gap-1 rounded-xl border p-3 text-right transition-all hover:border-primary/40 hover:shadow-sm sm:p-4'
+                className='group hover:border-primary/40 flex flex-col items-end gap-1 rounded-xl border p-3 text-right transition-all hover:shadow-sm sm:p-4'
               >
                 <span className='text-muted-foreground flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase'>
                   Next <ChevronRightIcon className='size-3' />
                 </span>
-                <span className='text-foreground line-clamp-2 text-xs font-medium transition-colors group-hover:text-primary sm:text-sm'>
+                <span className='text-foreground group-hover:text-primary line-clamp-2 text-xs font-medium transition-colors sm:text-sm'>
                   {nextArticle.title}
                 </span>
               </Link>
@@ -638,7 +761,12 @@ export function ArticleDetailsView({
             and trending topics in real-time.
           </p>
           <div className='flex gap-3 pt-2'>
-            <Button asChild size='lg' variant='outline' className='rounded-full px-8'>
+            <Button
+              asChild
+              size='lg'
+              variant='outline'
+              className='rounded-full px-8'
+            >
               <Link href='/articles'>Read More Daily Insights</Link>
             </Button>
           </div>

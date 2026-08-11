@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -36,10 +36,11 @@ import {
   LayoutGridIcon,
   ListIcon,
   SlidersHorizontalIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
   ZapIcon,
-  BanIcon
+  BanIcon,
+  AlertCircleIcon,
+  SettingsIcon,
+  CheckIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUser } from '@clerk/nextjs';
@@ -51,10 +52,12 @@ import {
   toggleArticlePublicAction,
   addInterestAction,
   deleteInterestAction,
-  getGlobalTrendingTopicsAction
+  refreshTierArticleAction,
+  markTierArticleReviewedAction
 } from '../actions';
 import { SYSTEM_DESIGN_SYSTEMS } from '../constants';
-import { useGlobalTrendsStore, useFeedPreferencesStore } from '../store';
+import { useFeedPreferencesStore } from '../store';
+import { getTierFreshness, needsReview } from '../utils/tier-status';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -69,7 +72,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
-import { HoverBorderGradient } from '@/components/ui/hover-border-gradient';
 
 const TIER_RANKING_EXAMPLES = [
   'Best 5 phones with longest battery life',
@@ -90,6 +92,9 @@ interface Article {
   seriesType: string | null;
   tierQuery: string | null;
   lastValidatedAt: Date | null;
+  lastChangedAt: Date | null;
+  updateSummary: string | null;
+  reviewedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -105,17 +110,64 @@ interface ArticlesViewProps {
   initialInterests: UserInterest[];
 }
 
+/** Compact freshness pill for ranked lists — the review cue lives here. */
+function TierStatusBadge({ article }: { article: Article }) {
+  const status = getTierFreshness(article);
+  const base = 'gap-1 px-2 py-0.5 text-[9px] tracking-widest uppercase';
+
+  if (status === 'needs-review') {
+    return (
+      <Badge
+        variant='outline'
+        className={cn(
+          base,
+          'border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+        )}
+        title={article.updateSummary ?? 'The rankings changed — review them'}
+      >
+        <AlertCircleIcon className='size-2.5' /> Updated · review
+      </Badge>
+    );
+  }
+
+  if (status === 'checked-today') {
+    return (
+      <Badge
+        variant='outline'
+        className={cn(
+          base,
+          'border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
+        )}
+      >
+        <CheckCircle2Icon className='size-2.5' /> Up to date
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge
+      variant='outline'
+      className={cn(
+        base,
+        'border-slate-400/50 text-slate-500 dark:text-slate-400'
+      )}
+    >
+      <RefreshCwIcon className='size-2.5' />
+      {article.lastValidatedAt
+        ? formatDistanceToNow(new Date(article.lastValidatedAt), {
+            addSuffix: true
+          })
+        : 'Never checked'}
+    </Badge>
+  );
+}
+
 export function ArticlesView({
   initialArticles,
   initialTopics,
   initialInterests
 }: ArticlesViewProps) {
   const { user } = useUser();
-  const {
-    trends: cachedTrends,
-    userId: cachedUserId,
-    setTrends: storeTrends
-  } = useGlobalTrendsStore();
   const {
     autoGenerateEnabled,
     blocklist,
@@ -129,21 +181,22 @@ export function ArticlesView({
   // Generation state
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [searchTopic, setSearchTopic] = useState('');
   const [personalTopics] = useState<string[]>(initialTopics);
   const [managedInterests, setManagedInterests] = useState<UserInterest[]>(
     initialInterests || []
   );
-  const [globalTrends, setGlobalTrends] = useState<string[]>(
-    cachedUserId === user?.id ? cachedTrends : []
-  );
-  const [isFetchingTrends, setIsFetchingTrends] = useState(false);
-  const [isGeneratingSystemDesign, setIsGeneratingSystemDesign] = useState(false);
+  const [isGeneratingSystemDesign, setIsGeneratingSystemDesign] =
+    useState(false);
   const [tierQuery, setTierQuery] = useState('');
   const [isGeneratingTier, setIsGeneratingTier] = useState(false);
 
-  // Preferences panel state
-  const [showPreferences, setShowPreferences] = useState(false);
+  // Ranked list maintenance
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+
+  // Interests / preferences state
+  const [activeTab, setActiveTab] = useState('interests');
+  const [isManagingInterests, setIsManagingInterests] = useState(false);
   const [newInterestInput, setNewInterestInput] = useState('');
   const [isAddingInterest, setIsAddingInterest] = useState(false);
   const [newBlocklistInput, setNewBlocklistInput] = useState('');
@@ -151,26 +204,24 @@ export function ArticlesView({
   // View mode
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  useEffect(() => {
-    if (cachedUserId === user?.id && cachedTrends.length > 0) return;
-    handleFetchGlobalTrends();
-  }, [user?.id]);
+  const myTierArticles = articles.filter(
+    (a) => a.seriesType === 'tier' && a.userId === user?.id
+  );
+  const tierArticlesNeedingReview = myTierArticles.filter(needsReview);
 
   const handleGenerateArticle = async (
     selectedTopic?: string,
     isPersonal = false
   ) => {
-    const topicToUse = selectedTopic || searchTopic;
     setIsGenerating(true);
     const toastId = toast.loading(
-      topicToUse
-        ? `Generating content about "${topicToUse}"...`
-        : 'Generating a new article from trending topics...'
+      selectedTopic
+        ? `Generating content about "${selectedTopic}"...`
+        : 'Generating a new article from your interests...'
     );
     try {
-      const newArticle = await generateArticleAction(topicToUse, isPersonal);
-      setArticles((prev) => [newArticle, ...prev]);
-      setSearchTopic('');
+      const newArticle = await generateArticleAction(selectedTopic, isPersonal);
+      setArticles((prev) => [newArticle as Article, ...prev]);
       toast.success(
         isPersonal
           ? 'Successfully generated a private article!'
@@ -247,20 +298,6 @@ export function ArticlesView({
     }
   };
 
-  const handleFetchGlobalTrends = async () => {
-    setIsFetchingTrends(true);
-    try {
-      const trends = await getGlobalTrendingTopicsAction();
-      setGlobalTrends(trends);
-      storeTrends(trends, user?.id ?? null);
-      if (trends.length > 0) toast.success('Found top 3 global trends!');
-    } catch {
-      toast.error('Failed to fetch trending topics');
-    } finally {
-      setIsFetchingTrends(false);
-    }
-  };
-
   const handleGenerateSystemDesign = async (system?: string) => {
     setIsGeneratingSystemDesign(true);
     const toastId = toast.loading(
@@ -268,7 +305,7 @@ export function ArticlesView({
     );
     try {
       const newArticle = await generateSystemDesignAction(system);
-      setArticles((prev) => [newArticle, ...prev]);
+      setArticles((prev) => [newArticle as Article, ...prev]);
       toast.success(`System design for "${newArticle.title}" is ready!`, {
         id: toastId
       });
@@ -288,7 +325,7 @@ export function ArticlesView({
     const toastId = toast.loading(`Building ranked list for "${q}"...`);
     try {
       const newArticle = await generateTierRankingAction(q.trim());
-      setArticles((prev) => [newArticle, ...prev]);
+      setArticles((prev) => [newArticle as Article, ...prev]);
       setTierQuery('');
       toast.success(`Ranked list "${newArticle.title}" is ready!`, {
         id: toastId
@@ -299,6 +336,45 @@ export function ArticlesView({
       });
     } finally {
       setIsGeneratingTier(false);
+    }
+  };
+
+  const handleRefreshTier = async (id: string) => {
+    setRefreshingId(id);
+    const toastId = toast.loading('Checking this list against today...');
+    try {
+      const { article: updated, hasChanged } =
+        await refreshTierArticleAction(id);
+      setArticles((prev) =>
+        prev.map((a) => (a.id === id ? (updated as Article) : a))
+      );
+      toast.success(
+        hasChanged
+          ? 'The rankings changed — give it a review.'
+          : 'Still accurate. Nothing changed.',
+        { id: toastId }
+      );
+    } catch {
+      toast.error('Failed to check this list. Please try again.', {
+        id: toastId
+      });
+    } finally {
+      setRefreshingId(null);
+    }
+  };
+
+  const handleMarkReviewed = async (id: string) => {
+    setReviewingId(id);
+    try {
+      const updated = await markTierArticleReviewedAction(id);
+      setArticles((prev) =>
+        prev.map((a) => (a.id === id ? (updated as Article) : a))
+      );
+      toast.success('Marked as reviewed');
+    } catch {
+      toast.error('Failed to mark as reviewed');
+    } finally {
+      setReviewingId(null);
     }
   };
 
@@ -347,17 +423,29 @@ export function ArticlesView({
         </p>
       </div>
 
-      {/* Unified generation card */}
+      {/* Unified workspace: explore interests, build ranked lists, tune the feed */}
       <Card className='border-primary/10 bg-muted/20 overflow-hidden border-2 shadow-lg backdrop-blur-sm'>
-        <Tabs defaultValue='daily'>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className='border-b px-3 pt-3 sm:px-6 sm:pt-4'>
             <TabsList className='h-9 w-full gap-1 bg-transparent p-0'>
               <TabsTrigger
-                value='daily'
+                value='interests'
                 className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-2 py-1.5 text-sm font-medium sm:px-4'
               >
                 <SparklesIcon className='size-3.5 sm:mr-1.5' />
-                <span className='hidden sm:inline'>Daily Feed</span>
+                <span className='hidden sm:inline'>Your Interests</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value='tier'
+                className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary relative rounded-md px-2 py-1.5 text-sm font-medium sm:px-4'
+              >
+                <TrophyIcon className='size-3.5 sm:mr-1.5' />
+                <span className='hidden sm:inline'>Ranked Lists</span>
+                {tierArticlesNeedingReview.length > 0 && (
+                  <span className='ml-1.5 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white'>
+                    {tierArticlesNeedingReview.length}
+                  </span>
+                )}
               </TabsTrigger>
               <TabsTrigger
                 value='system-design'
@@ -367,117 +455,111 @@ export function ArticlesView({
                 <span className='hidden sm:inline'>System Design</span>
               </TabsTrigger>
               <TabsTrigger
-                value='tier'
+                value='preferences'
                 className='data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-2 py-1.5 text-sm font-medium sm:px-4'
               >
-                <TrophyIcon className='size-3.5 sm:mr-1.5' />
-                <span className='hidden sm:inline'>Tier Rankings</span>
+                <SlidersHorizontalIcon className='size-3.5 sm:mr-1.5' />
+                <span className='hidden sm:inline'>Preferences</span>
               </TabsTrigger>
             </TabsList>
           </div>
 
-          {/* Daily Feed tab */}
-          <TabsContent value='daily' className='mt-0'>
+          {/* Interests tab — explore and manage what you care about */}
+          <TabsContent value='interests' className='mt-0'>
             <CardContent className='space-y-5 p-4 sm:p-6'>
-              <div className='flex flex-col gap-3 md:flex-row'>
-                <div className='relative flex-1'>
-                  <Input
-                    placeholder='Enter a keyword (e.g., "Future of Energy")'
-                    value={searchTopic}
-                    onChange={(e) => setSearchTopic(e.target.value)}
-                    className='bg-background focus-visible:border-primary/50 h-12 border-2 pl-11 text-base shadow-sm transition-all'
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && searchTopic.trim())
-                        handleGenerateArticle();
-                    }}
-                  />
-                  <SearchIcon className='text-muted-foreground absolute top-1/2 left-3.5 size-4 -translate-y-1/2' />
-                </div>
+              <div className='flex flex-wrap items-start justify-between gap-3'>
+                <p className='text-muted-foreground max-w-xl text-sm leading-relaxed'>
+                  Tap an interest to generate a fresh article on it. Everything
+                  here also feeds the daily auto-generated content.
+                </p>
                 <Button
-                  onClick={() => handleGenerateArticle()}
-                  disabled={isGenerating}
-                  className='h-12 gap-2 px-6 font-bold'
+                  variant={isManagingInterests ? 'secondary' : 'outline'}
+                  size='sm'
+                  className='shrink-0 gap-2'
+                  onClick={() => setIsManagingInterests((v) => !v)}
                 >
-                  {isGenerating ? (
+                  {isManagingInterests ? (
                     <>
-                      <Loader2Icon className='size-4 animate-spin' /> Crafting...
+                      <CheckIcon className='size-3.5' /> Done
                     </>
                   ) : (
                     <>
-                      <SparklesIcon className='size-4 text-yellow-400' />
-                      {searchTopic ? 'Generate' : 'Explore Trends'}
+                      <SettingsIcon className='size-3.5' /> Manage
                     </>
                   )}
                 </Button>
               </div>
 
-              {managedInterests.length > 0 && (
-                <div className='space-y-2'>
-                  <p className='text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-[0.2em] uppercase'>
-                    <TrendingUpIcon className='size-3.5' /> Your Interests
-                  </p>
-                  <div className='flex flex-wrap gap-2'>
-                    {managedInterests.map((interest) => (
+              <div className='space-y-2'>
+                <p className='text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-[0.2em] uppercase'>
+                  <TrendingUpIcon className='size-3.5' /> Your Interests
+                </p>
+                <div className='flex flex-wrap items-center gap-2'>
+                  {managedInterests.map((interest) =>
+                    isManagingInterests ? (
                       <Badge
                         key={interest.id}
                         variant='outline'
-                        className='bg-background hover:bg-primary/5 border-primary/20 max-w-[180px] cursor-pointer rounded-full px-3 py-1 text-sm font-medium shadow-sm transition-all'
-                        onClick={() => handleGenerateArticle(interest.name)}
-                        title={interest.name}
+                        className='bg-background border-primary/20 flex max-w-[240px] items-center gap-2 rounded-full px-3 py-1 text-sm font-medium'
                       >
                         <span className='truncate'>{interest.name}</span>
+                        <button
+                          onClick={() => handleDeleteInterest(interest.id)}
+                          className='text-muted-foreground hover:text-destructive shrink-0 transition-colors'
+                          title='Remove interest'
+                        >
+                          <XIcon className='size-3' />
+                        </button>
                       </Badge>
-                    ))}
+                    ) : (
+                      <button
+                        key={interest.id}
+                        onClick={() => handleGenerateArticle(interest.name)}
+                        disabled={isGenerating}
+                        className='group'
+                        title={`Generate an article on "${interest.name}"`}
+                      >
+                        <Badge
+                          variant='outline'
+                          className='bg-background hover:bg-primary hover:text-primary-foreground hover:border-primary border-primary/20 max-w-[240px] cursor-pointer rounded-full px-3 py-1 text-sm font-medium shadow-sm transition-all group-disabled:cursor-not-allowed group-disabled:opacity-50'
+                        >
+                          <span className='truncate'>{interest.name}</span>
+                        </Badge>
+                      </button>
+                    )
+                  )}
+
+                  <div className='flex items-center gap-2'>
+                    <Input
+                      placeholder='Add an interest...'
+                      value={newInterestInput}
+                      onChange={(e) => setNewInterestInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddInterest();
+                      }}
+                      className='h-8 w-40 text-xs'
+                    />
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      onClick={handleAddInterest}
+                      disabled={isAddingInterest || !newInterestInput.trim()}
+                      className='h-8 w-8 border border-dashed'
+                      title='Add interest'
+                    >
+                      {isAddingInterest ? (
+                        <Loader2Icon className='size-3.5 animate-spin' />
+                      ) : (
+                        <PlusIcon className='size-3.5' />
+                      )}
+                    </Button>
                   </div>
                 </div>
-              )}
-
-              <div className='space-y-2'>
-                <div className='flex items-center justify-between'>
-                  <p className='text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-[0.2em] uppercase'>
-                    <GlobeIcon className='size-3.5' /> Global Trends
+                {managedInterests.length === 0 && (
+                  <p className='text-muted-foreground py-1 text-xs italic'>
+                    Add your first interest to start shaping your feed.
                   </p>
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    onClick={handleFetchGlobalTrends}
-                    disabled={isFetchingTrends}
-                    className='h-6 gap-1 px-2 text-[10px]'
-                  >
-                    {isFetchingTrends ? (
-                      <Loader2Icon className='size-3 animate-spin' />
-                    ) : (
-                      <SparklesIcon className='size-3' />
-                    )}
-                    Suggest Top 3
-                  </Button>
-                </div>
-                <div className='flex flex-wrap gap-2'>
-                  {globalTrends.length > 0 ? (
-                    globalTrends.map((topic) => (
-                      <HoverBorderGradient
-                        key={topic}
-                        onClick={() => handleGenerateArticle(topic)}
-                        disabled={isGenerating}
-                        className='bg-background flex max-w-full items-center justify-center p-0'
-                        containerClassName={cn(
-                          'h-auto max-w-full',
-                          isGenerating && 'opacity-50 cursor-not-allowed'
-                        )}
-                      >
-                        <span className='text-foreground line-clamp-1 max-w-[260px] px-3 py-2 text-sm font-medium'>
-                          {topic}
-                        </span>
-                      </HoverBorderGradient>
-                    ))
-                  ) : (
-                    <p className='text-muted-foreground py-1 text-xs italic'>
-                      {isFetchingTrends
-                        ? 'Fetching...'
-                        : "Click above to see what's trending globally..."}
-                    </p>
-                  )}
-                </div>
+                )}
               </div>
 
               {personalTopics.length > 0 && (
@@ -491,14 +573,172 @@ export function ArticlesView({
                         key={topic}
                         onClick={() => handleGenerateArticle(topic, true)}
                         disabled={isGenerating}
+                        className='group'
                       >
                         <Badge
                           variant='outline'
-                          className='border-primary/30 bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-sm font-medium transition-all'
+                          className='border-primary/30 bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-sm font-medium transition-all group-disabled:cursor-not-allowed group-disabled:opacity-50'
                         >
                           {topic}
                         </Badge>
                       </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isGenerating && (
+                <p className='text-muted-foreground flex items-center gap-2 text-xs'>
+                  <Loader2Icon className='size-3.5 animate-spin' /> Crafting
+                  your article...
+                </p>
+              )}
+            </CardContent>
+          </TabsContent>
+
+          {/* Ranked Lists tab — create lists and keep them current */}
+          <TabsContent value='tier' className='mt-0'>
+            <CardContent className='space-y-6 p-4 sm:p-6'>
+              <div className='space-y-3'>
+                <p className='text-muted-foreground text-sm leading-relaxed'>
+                  Build a ranked list for anything you want compared. Each list
+                  is re-checked daily — when the rankings actually move, it gets
+                  flagged for your review.
+                </p>
+                <div className='flex flex-col gap-3 sm:flex-row'>
+                  <div className='relative flex-1'>
+                    <Input
+                      placeholder='e.g. "Best 5 phones with longest battery life"'
+                      value={tierQuery}
+                      onChange={(e) => setTierQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && tierQuery.trim())
+                          handleGenerateTierRanking();
+                      }}
+                      className='bg-background focus-visible:border-primary/50 h-11 border-2 pl-10 shadow-sm transition-all'
+                      disabled={isGeneratingTier}
+                    />
+                    <SearchIcon className='text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2' />
+                  </div>
+                  <Button
+                    onClick={() => handleGenerateTierRanking()}
+                    disabled={isGeneratingTier || !tierQuery.trim()}
+                    className='h-11 gap-2 px-6 font-semibold'
+                  >
+                    {isGeneratingTier ? (
+                      <>
+                        <Loader2Icon className='size-4 animate-spin' />{' '}
+                        Ranking...
+                      </>
+                    ) : (
+                      <>
+                        <TrophyIcon className='size-4' /> Generate Ranking
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                  {TIER_RANKING_EXAMPLES.map((example) => (
+                    <button
+                      key={example}
+                      onClick={() => handleGenerateTierRanking(example)}
+                      disabled={isGeneratingTier}
+                      className='group'
+                    >
+                      <Badge
+                        variant='outline'
+                        className='border-primary/30 bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all group-disabled:cursor-not-allowed group-disabled:opacity-50'
+                      >
+                        {example}
+                      </Badge>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Your ranked lists, with freshness status */}
+              {myTierArticles.length > 0 && (
+                <div className='space-y-2'>
+                  <div className='flex items-center justify-between'>
+                    <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
+                      Your Ranked Lists
+                    </p>
+                    {tierArticlesNeedingReview.length > 0 && (
+                      <span className='text-xs font-medium text-amber-600 dark:text-amber-400'>
+                        {tierArticlesNeedingReview.length} need
+                        {tierArticlesNeedingReview.length === 1 ? 's' : ''}{' '}
+                        review
+                      </span>
+                    )}
+                  </div>
+                  <div className='divide-y rounded-xl border'>
+                    {myTierArticles.map((article) => (
+                      <div
+                        key={article.id}
+                        className={cn(
+                          'flex flex-wrap items-center gap-3 px-4 py-3 transition-colors',
+                          needsReview(article) && 'bg-amber-500/5'
+                        )}
+                      >
+                        <div className='min-w-0 flex-1'>
+                          <Link
+                            href={`/articles/${article.id}`}
+                            className='hover:text-primary line-clamp-1 text-sm font-medium transition-colors'
+                          >
+                            {article.title}
+                          </Link>
+                          <div className='mt-1 flex flex-wrap items-center gap-2'>
+                            <TierStatusBadge article={article} />
+                            {needsReview(article) && article.updateSummary && (
+                              <span className='text-muted-foreground line-clamp-1 text-[11px] italic'>
+                                {article.updateSummary}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className='flex shrink-0 items-center gap-1'>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='text-muted-foreground hover:text-primary h-7 w-7'
+                            onClick={() => handleRefreshTier(article.id)}
+                            disabled={refreshingId === article.id}
+                            title='Check if this list is still current'
+                          >
+                            {refreshingId === article.id ? (
+                              <Loader2Icon className='size-3.5 animate-spin' />
+                            ) : (
+                              <RefreshCwIcon className='size-3.5' />
+                            )}
+                          </Button>
+                          {needsReview(article) && (
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className='h-7 gap-1 text-xs text-amber-600 dark:text-amber-400'
+                              onClick={() => handleMarkReviewed(article.id)}
+                              disabled={reviewingId === article.id}
+                            >
+                              {reviewingId === article.id ? (
+                                <Loader2Icon className='size-3 animate-spin' />
+                              ) : (
+                                <CheckIcon className='size-3' />
+                              )}
+                              Reviewed
+                            </Button>
+                          )}
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            asChild
+                            className='h-7 gap-1 text-xs'
+                          >
+                            <Link href={`/articles/${article.id}`}>
+                              <BookOpenIcon className='size-3' /> Open
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -555,271 +795,188 @@ export function ArticlesView({
             </CardContent>
           </TabsContent>
 
-          {/* Tier Rankings tab */}
-          <TabsContent value='tier' className='mt-0'>
-            <CardContent className='space-y-5 p-4 sm:p-6'>
+          {/* Preferences tab — control what gets auto-generated */}
+          <TabsContent value='preferences' className='mt-0'>
+            <CardContent className='space-y-7 p-4 sm:p-6'>
               <p className='text-muted-foreground text-sm leading-relaxed'>
-                Search for any ranked list — best products, local spots, tools,
-                or anything you want compared. Refreshed daily to stay current.
+                Control what gets auto-generated for your daily feed.
               </p>
-              <div className='flex flex-col gap-3 sm:flex-row'>
-                <div className='relative flex-1'>
-                  <Input
-                    placeholder='e.g. "Best 5 phones with longest battery life"'
-                    value={tierQuery}
-                    onChange={(e) => setTierQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && tierQuery.trim())
-                        handleGenerateTierRanking();
-                    }}
-                    className='bg-background focus-visible:border-primary/50 h-11 border-2 pl-10 shadow-sm transition-all'
-                    disabled={isGeneratingTier}
-                  />
-                  <SearchIcon className='text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2' />
+
+              {/* Auto-generate toggle */}
+              <div className='flex items-center justify-between rounded-lg border p-3'>
+                <div className='space-y-0.5'>
+                  <Label className='flex items-center gap-2 text-sm font-medium'>
+                    <ZapIcon className='text-primary size-3.5' />
+                    Auto-generate daily content
+                  </Label>
+                  <p className='text-muted-foreground text-xs'>
+                    Automatically create new articles each day based on your
+                    interests
+                  </p>
                 </div>
-                <Button
-                  onClick={() => handleGenerateTierRanking()}
-                  disabled={isGeneratingTier || !tierQuery.trim()}
-                  className='h-11 gap-2 px-6 font-semibold'
-                >
-                  {isGeneratingTier ? (
-                    <>
-                      <Loader2Icon className='size-4 animate-spin' /> Ranking...
-                    </>
-                  ) : (
-                    <>
-                      <TrophyIcon className='size-4' /> Generate Ranking
-                    </>
-                  )}
-                </Button>
+                <Switch
+                  checked={autoGenerateEnabled}
+                  onCheckedChange={setAutoGenerate}
+                />
               </div>
+
+              {/* Ranked list freshness overview */}
               <div className='space-y-2'>
                 <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
-                  Try these examples
+                  Ranked List Freshness
                 </p>
-                <div className='flex flex-wrap gap-2'>
-                  {TIER_RANKING_EXAMPLES.map((example) => (
+                {myTierArticles.length === 0 ? (
+                  <p className='text-muted-foreground text-xs'>
+                    You have no ranked lists yet. Create one from the{' '}
                     <button
-                      key={example}
-                      onClick={() => handleGenerateTierRanking(example)}
-                      disabled={isGeneratingTier}
-                      className='group'
+                      className='text-primary underline underline-offset-2'
+                      onClick={() => setActiveTab('tier')}
                     >
-                      <Badge
-                        variant='outline'
-                        className='border-primary/30 bg-primary/5 hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all group-disabled:cursor-not-allowed group-disabled:opacity-50'
-                      >
-                        {example}
-                      </Badge>
-                    </button>
+                      Ranked Lists
+                    </button>{' '}
+                    tab and it will be re-checked daily.
+                  </p>
+                ) : (
+                  <div className='flex flex-wrap items-center gap-3 rounded-lg border p-3'>
+                    <div className='flex-1 text-xs'>
+                      <p className='font-medium'>
+                        {myTierArticles.length} list
+                        {myTierArticles.length === 1 ? '' : 's'} tracked daily
+                      </p>
+                      <p className='text-muted-foreground mt-0.5'>
+                        {tierArticlesNeedingReview.length > 0 ? (
+                          <span className='text-amber-600 dark:text-amber-400'>
+                            {tierArticlesNeedingReview.length} changed since you
+                            last looked
+                          </span>
+                        ) : (
+                          'All lists are current — nothing to review'
+                        )}
+                      </p>
+                    </div>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      className='h-7 gap-1 text-xs'
+                      onClick={() => setActiveTab('tier')}
+                    >
+                      <TrophyIcon className='size-3' /> Review lists
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Source weights */}
+              <div className='space-y-4'>
+                <div>
+                  <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
+                    Source Weights
+                  </p>
+                  <p className='text-muted-foreground mt-0.5 text-xs'>
+                    Tune how much each source influences auto-generated content.
+                  </p>
+                </div>
+                <div className='space-y-5'>
+                  {(
+                    [
+                      {
+                        key: 'interests' as const,
+                        label: 'Your Interests',
+                        icon: <TrendingUpIcon className='size-3.5' />
+                      },
+                      {
+                        key: 'trends' as const,
+                        label: 'Global Trends',
+                        icon: <GlobeIcon className='size-3.5' />
+                      },
+                      {
+                        key: 'lists' as const,
+                        label: 'From Your Lists',
+                        icon: <SparklesIcon className='size-3.5' />
+                      }
+                    ] as const
+                  ).map(({ key, label, icon }) => (
+                    <div key={key} className='space-y-2'>
+                      <div className='flex items-center justify-between'>
+                        <Label className='text-muted-foreground flex items-center gap-1.5 text-xs font-medium'>
+                          {icon} {label}
+                        </Label>
+                        <span className='text-muted-foreground w-8 text-right text-xs tabular-nums'>
+                          {weights[key]}%
+                        </span>
+                      </div>
+                      <Slider
+                        value={[weights[key]]}
+                        onValueChange={([v]) => setWeights({ [key]: v })}
+                        min={0}
+                        max={100}
+                        step={5}
+                      />
+                    </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Blocklist */}
+              <div className='space-y-3'>
+                <div>
+                  <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
+                    Topic Blocklist
+                  </p>
+                  <p className='text-muted-foreground mt-0.5 text-xs'>
+                    Topics you never want generated in your feed.
+                  </p>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                  {blocklist.map((item) => (
+                    <Badge
+                      key={item.id}
+                      variant='outline'
+                      className='border-destructive/30 bg-destructive/5 flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium'
+                    >
+                      <BanIcon className='text-destructive/60 size-3 shrink-0' />
+                      {item.topic}
+                      <button
+                        onClick={() => removeFromBlocklist(item.id)}
+                        className='text-muted-foreground hover:text-destructive transition-colors'
+                      >
+                        <XIcon className='size-3' />
+                      </button>
+                    </Badge>
+                  ))}
+                  <div className='flex items-center gap-2'>
+                    <Input
+                      placeholder='Block a topic...'
+                      value={newBlocklistInput}
+                      onChange={(e) => setNewBlocklistInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newBlocklistInput.trim()) {
+                          addToBlocklist(newBlocklistInput.trim());
+                          setNewBlocklistInput('');
+                        }
+                      }}
+                      className='h-8 w-36 text-xs'
+                    />
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      disabled={!newBlocklistInput.trim()}
+                      onClick={() => {
+                        if (newBlocklistInput.trim()) {
+                          addToBlocklist(newBlocklistInput.trim());
+                          setNewBlocklistInput('');
+                        }
+                      }}
+                      className='h-8 w-8 border border-dashed'
+                    >
+                      <PlusIcon className='size-3.5' />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>
           </TabsContent>
         </Tabs>
-      </Card>
-
-      {/* Feed Preferences */}
-      <Card className='overflow-hidden'>
-        <CardHeader className='pb-2'>
-          <div className='flex items-center justify-between'>
-            <button
-              className='flex flex-1 items-center gap-2 text-left'
-              onClick={() => setShowPreferences((v) => !v)}
-            >
-              <SlidersHorizontalIcon className='text-primary size-4 shrink-0' />
-              <CardTitle className='text-base'>Feed Preferences</CardTitle>
-              {showPreferences ? (
-                <ChevronUpIcon className='text-muted-foreground ml-auto size-4' />
-              ) : (
-                <ChevronDownIcon className='text-muted-foreground ml-auto size-4' />
-              )}
-            </button>
-          </div>
-          <p className='text-muted-foreground text-xs'>
-            Control what gets auto-generated for your daily feed.
-          </p>
-        </CardHeader>
-
-        {showPreferences && (
-          <CardContent className='space-y-7 pt-2'>
-            {/* Auto-generate toggle */}
-            <div className='flex items-center justify-between rounded-lg border p-3'>
-              <div className='space-y-0.5'>
-                <Label className='flex items-center gap-2 text-sm font-medium'>
-                  <ZapIcon className='text-primary size-3.5' />
-                  Auto-generate daily content
-                </Label>
-                <p className='text-muted-foreground text-xs'>
-                  Automatically create new articles each day based on your
-                  preferences
-                </p>
-              </div>
-              <Switch
-                checked={autoGenerateEnabled}
-                onCheckedChange={setAutoGenerate}
-              />
-            </div>
-
-            {/* Source weights */}
-            <div className='space-y-4'>
-              <div>
-                <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
-                  Source Weights
-                </p>
-                <p className='text-muted-foreground mt-0.5 text-xs'>
-                  Tune how much each source influences auto-generated content.
-                </p>
-              </div>
-              <div className='space-y-5'>
-                {(
-                  [
-                    {
-                      key: 'interests' as const,
-                      label: 'Your Interests',
-                      icon: <TrendingUpIcon className='size-3.5' />
-                    },
-                    {
-                      key: 'trends' as const,
-                      label: 'Global Trends',
-                      icon: <GlobeIcon className='size-3.5' />
-                    },
-                    {
-                      key: 'lists' as const,
-                      label: 'From Your Lists',
-                      icon: <SparklesIcon className='size-3.5' />
-                    }
-                  ] as const
-                ).map(({ key, label, icon }) => (
-                  <div key={key} className='space-y-2'>
-                    <div className='flex items-center justify-between'>
-                      <Label className='text-muted-foreground flex items-center gap-1.5 text-xs font-medium'>
-                        {icon} {label}
-                      </Label>
-                      <span className='text-muted-foreground w-8 text-right text-xs tabular-nums'>
-                        {weights[key]}%
-                      </span>
-                    </div>
-                    <Slider
-                      value={[weights[key]]}
-                      onValueChange={([v]) => setWeights({ [key]: v })}
-                      min={0}
-                      max={100}
-                      step={5}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Interests management */}
-            <div className='space-y-3'>
-              <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
-                Managed Interests
-              </p>
-              <div className='flex flex-wrap gap-2'>
-                {managedInterests.map((interest) => (
-                  <Badge
-                    key={interest.id}
-                    variant='outline'
-                    className='bg-background border-primary/20 flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium'
-                  >
-                    {interest.name}
-                    <button
-                      onClick={() => handleDeleteInterest(interest.id)}
-                      className='text-muted-foreground hover:text-destructive transition-colors'
-                    >
-                      <XIcon className='size-3' />
-                    </button>
-                  </Badge>
-                ))}
-                <div className='flex items-center gap-2'>
-                  <Input
-                    placeholder='Add interest...'
-                    value={newInterestInput}
-                    onChange={(e) => setNewInterestInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleAddInterest();
-                    }}
-                    className='h-8 w-32 text-xs'
-                  />
-                  <Button
-                    variant='ghost'
-                    size='icon'
-                    onClick={handleAddInterest}
-                    disabled={isAddingInterest || !newInterestInput.trim()}
-                    className='h-8 w-8 border border-dashed'
-                  >
-                    {isAddingInterest ? (
-                      <Loader2Icon className='size-3.5 animate-spin' />
-                    ) : (
-                      <PlusIcon className='size-3.5' />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Blocklist */}
-            <div className='space-y-3'>
-              <div>
-                <p className='text-muted-foreground text-xs font-bold tracking-[0.2em] uppercase'>
-                  Topic Blocklist
-                </p>
-                <p className='text-muted-foreground mt-0.5 text-xs'>
-                  Topics you never want generated in your feed.
-                </p>
-              </div>
-              <div className='flex flex-wrap gap-2'>
-                {blocklist.map((item) => (
-                  <Badge
-                    key={item.id}
-                    variant='outline'
-                    className='border-destructive/30 bg-destructive/5 flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium'
-                  >
-                    <BanIcon className='text-destructive/60 size-3 shrink-0' />
-                    {item.topic}
-                    <button
-                      onClick={() => removeFromBlocklist(item.id)}
-                      className='text-muted-foreground hover:text-destructive transition-colors'
-                    >
-                      <XIcon className='size-3' />
-                    </button>
-                  </Badge>
-                ))}
-                <div className='flex items-center gap-2'>
-                  <Input
-                    placeholder='Block a topic...'
-                    value={newBlocklistInput}
-                    onChange={(e) => setNewBlocklistInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newBlocklistInput.trim()) {
-                        addToBlocklist(newBlocklistInput.trim());
-                        setNewBlocklistInput('');
-                      }
-                    }}
-                    className='h-8 w-36 text-xs'
-                  />
-                  <Button
-                    variant='ghost'
-                    size='icon'
-                    disabled={!newBlocklistInput.trim()}
-                    onClick={() => {
-                      if (newBlocklistInput.trim()) {
-                        addToBlocklist(newBlocklistInput.trim());
-                        setNewBlocklistInput('');
-                      }
-                    }}
-                    className='h-8 w-8 border border-dashed'
-                  >
-                    <PlusIcon className='size-3.5' />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        )}
       </Card>
 
       {/* Latest Insights header with view toggle */}
@@ -859,8 +1016,8 @@ export function ArticlesView({
           </div>
           <CardTitle className='text-xl'>No articles yet</CardTitle>
           <p className='text-muted-foreground mt-2 max-w-sm'>
-            Generate your first article based on your interests or search for a
-            custom topic above.
+            Generate your first article from one of your interests, or build a
+            ranked list above.
           </p>
           <Button
             className='mt-6'
@@ -876,7 +1033,10 @@ export function ArticlesView({
           {articles.map((article) => (
             <Card
               key={article.id}
-              className='group flex h-full flex-col overflow-hidden transition-all hover:shadow-xl'
+              className={cn(
+                'group flex h-full flex-col overflow-hidden transition-all hover:shadow-xl',
+                needsReview(article) && 'border-amber-500/40'
+              )}
             >
               <CardHeader className='pb-3'>
                 <div className='mb-3 flex items-start justify-between gap-4'>
@@ -887,33 +1047,9 @@ export function ArticlesView({
                     >
                       {article.topic || 'Trending'}
                     </Badge>
-                    {article.seriesType === 'tier' &&
-                      article.lastValidatedAt &&
-                      (() => {
-                        const h =
-                          (Date.now() -
-                            new Date(article.lastValidatedAt).getTime()) /
-                          3600000;
-                        return h < 24 ? (
-                          <Badge
-                            variant='outline'
-                            className='gap-1 border-emerald-500/50 px-2 py-0.5 text-[9px] tracking-widest text-emerald-600 uppercase dark:text-emerald-400'
-                          >
-                            <CheckCircle2Icon className='size-2.5' /> Updated
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant='outline'
-                            className='gap-1 border-slate-400/50 px-2 py-0.5 text-[9px] tracking-widest text-slate-500 uppercase dark:text-slate-400'
-                          >
-                            <RefreshCwIcon className='size-2.5' />
-                            {formatDistanceToNow(
-                              new Date(article.lastValidatedAt),
-                              { addSuffix: true }
-                            )}
-                          </Badge>
-                        );
-                      })()}
+                    {article.seriesType === 'tier' && (
+                      <TierStatusBadge article={article} />
+                    )}
                     {article.isPublic === 'false' && (
                       <Badge
                         variant='outline'
@@ -941,6 +1077,11 @@ export function ArticlesView({
                 </Link>
               </CardHeader>
               <CardContent className='flex-1 pb-6'>
+                {needsReview(article) && article.updateSummary && (
+                  <p className='mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs leading-snug text-amber-800 dark:text-amber-300'>
+                    {article.updateSummary}
+                  </p>
+                )}
                 <p className='text-muted-foreground line-clamp-4 text-sm leading-relaxed'>
                   {article.summary}
                 </p>
@@ -1003,7 +1144,10 @@ export function ArticlesView({
           {articles.map((article) => (
             <div
               key={article.id}
-              className='hover:bg-muted/30 flex items-center gap-4 px-4 py-3 transition-colors'
+              className={cn(
+                'hover:bg-muted/30 flex items-center gap-4 px-4 py-3 transition-colors',
+                needsReview(article) && 'bg-amber-500/5'
+              )}
             >
               <div className='min-w-0 flex-1'>
                 <Link
@@ -1022,12 +1166,7 @@ export function ArticlesView({
                     </Badge>
                   )}
                   {article.seriesType === 'tier' && (
-                    <Badge
-                      variant='outline'
-                      className='gap-1 px-2 py-0 text-[9px] tracking-widest uppercase'
-                    >
-                      <TrophyIcon className='size-2.5' /> Tier
-                    </Badge>
+                    <TierStatusBadge article={article} />
                   )}
                   {article.isPublic === 'false' && (
                     <Badge
@@ -1038,7 +1177,9 @@ export function ArticlesView({
                     </Badge>
                   )}
                   <span className='text-muted-foreground text-[10px]'>
-                    {formatDistanceToNow(article.createdAt, { addSuffix: true })}
+                    {formatDistanceToNow(article.createdAt, {
+                      addSuffix: true
+                    })}
                   </span>
                 </div>
               </div>

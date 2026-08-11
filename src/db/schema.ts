@@ -155,7 +155,10 @@ export const articles = pgTable('articles', {
   userId: text('user_id'), // Optional: could be "system" or a specific user
   seriesType: text('series_type'), // 'tier' | null
   tierQuery: text('tier_query'), // Original search query for tier ranking articles
-  lastValidatedAt: timestamp('last_validated_at'), // When tier list was last validated as current
+  lastValidatedAt: timestamp('last_validated_at'), // When tier list was last checked against reality
+  lastChangedAt: timestamp('last_changed_at'), // When a check actually changed the rankings
+  updateSummary: text('update_summary'), // What changed on the most recent ranking change
+  reviewedAt: timestamp('reviewed_at'), // When the owner last acknowledged a ranking change
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
