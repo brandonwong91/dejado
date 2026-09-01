@@ -1,6 +1,12 @@
 'use client';
 
-import { useOptimistic, useTransition } from 'react';
+import {
+  useEffect,
+  useOptimistic,
+  useRef,
+  useState,
+  useTransition
+} from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,7 +26,8 @@ import { sendNotification } from '@/lib/notifications';
 import {
   deletePaymentAction,
   renewPaymentAction,
-  togglePaymentStatusAction
+  togglePaymentStatusAction,
+  updatePaymentAmountAction
 } from '../actions';
 import { PaymentDialog } from './payment-dialog';
 
@@ -45,6 +52,57 @@ export function PaymentCard({ payment }: PaymentCardProps) {
   const daysDiff = differenceInCalendarDays(payment.dueDate, today);
   const [isPending, startTransition] = useTransition();
   const [optimisticIsPaid, setOptimisticIsPaid] = useOptimistic(isPaid);
+  const [isSavingAmount, startAmountTransition] = useTransition();
+  const [optimisticAmount, setOptimisticAmount] = useOptimistic(payment.amount);
+  const [editingAmount, setEditingAmount] = useState(false);
+  const [amountDraft, setAmountDraft] = useState(payment.amount);
+  const amountInputRef = useRef<HTMLInputElement>(null);
+  // Guards against a second commit when Enter (or Escape) unmounts the input
+  // and the browser fires a trailing blur.
+  const skipCommitRef = useRef(false);
+
+  useEffect(() => {
+    if (editingAmount) {
+      amountInputRef.current?.focus();
+      amountInputRef.current?.select();
+    }
+  }, [editingAmount]);
+
+  function startEditingAmount() {
+    setAmountDraft(payment.amount);
+    skipCommitRef.current = false;
+    setEditingAmount(true);
+  }
+
+  function cancelEditingAmount() {
+    skipCommitRef.current = true;
+    setAmountDraft(payment.amount);
+    setEditingAmount(false);
+  }
+
+  function commitAmount() {
+    if (skipCommitRef.current) return;
+    skipCommitRef.current = true;
+    setEditingAmount(false);
+    const trimmed = amountDraft.trim();
+    const parsed = parseFloat(trimmed);
+    if (!trimmed || isNaN(parsed) || parsed < 0) {
+      toast.error('Enter a valid amount');
+      return;
+    }
+    const nextAmount = parsed.toFixed(2);
+    if (nextAmount === parseFloat(payment.amount).toFixed(2)) return;
+
+    startAmountTransition(async () => {
+      setOptimisticAmount(nextAmount);
+      try {
+        await updatePaymentAmountAction(payment.id, nextAmount);
+        toast.success('Amount updated');
+      } catch (error) {
+        toast.error('Failed to update amount');
+      }
+    });
+  }
 
   const getStatusColor = () => {
     if (optimisticIsPaid) return '';
@@ -183,30 +241,60 @@ export function PaymentCard({ payment }: PaymentCardProps) {
 
         <div className='flex items-center justify-between border-t pt-4 sm:shrink-0 sm:justify-end sm:border-0 sm:pt-0'>
           <div className='mr-4 text-right sm:mr-6'>
-            <div
-              className={cn(
-                'font-mono text-xl font-bold md:text-2xl',
-                optimisticIsPaid && 'text-muted-foreground line-through',
-                !optimisticIsPaid &&
-                  daysDiff <= 0 &&
-                  'text-red-600 dark:text-red-400'
-              )}
-            >
-              {payment.amount}{' '}
-              <small className='text-muted-foreground ml-0.5 text-xs font-normal'>
-                {payment.currency}
-              </small>
-            </div>
+            {editingAmount ? (
+              <div className='flex items-center justify-end gap-1'>
+                <input
+                  ref={amountInputRef}
+                  type='number'
+                  step='0.01'
+                  min='0'
+                  inputMode='decimal'
+                  value={amountDraft}
+                  onChange={(event) => setAmountDraft(event.target.value)}
+                  onBlur={commitAmount}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      commitAmount();
+                    } else if (event.key === 'Escape') {
+                      event.preventDefault();
+                      cancelEditingAmount();
+                    }
+                  }}
+                  className='border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-28 rounded-md border bg-transparent px-2 text-right font-mono text-xl font-bold outline-none focus-visible:ring-[3px] md:text-2xl'
+                />
+                <small className='text-muted-foreground text-xs font-normal'>
+                  {payment.currency}
+                </small>
+              </div>
+            ) : (
+              <button
+                type='button'
+                onClick={startEditingAmount}
+                title='Click to edit amount'
+                className={cn(
+                  'hover:bg-muted/50 -mr-2 rounded-md px-2 py-0.5 text-right font-mono text-xl font-bold transition-colors md:text-2xl',
+                  isSavingAmount && 'animate-pulse',
+                  optimisticIsPaid && 'text-muted-foreground line-through',
+                  !optimisticIsPaid &&
+                    daysDiff <= 0 &&
+                    'text-red-600 dark:text-red-400'
+                )}
+              >
+                {optimisticAmount}{' '}
+                <small className='text-muted-foreground ml-0.5 text-xs font-normal'>
+                  {payment.currency}
+                </small>
+              </button>
+            )}
             {(() => {
-              const prev = parseFloat(payment.previousAmount || '');
-              const curr = parseFloat(payment.amount);
-              if (
-                !payment.previousAmount ||
-                isNaN(prev) ||
-                isNaN(curr) ||
-                prev === curr
-              )
-                return null;
+              const prev = parseFloat(
+                (optimisticAmount !== payment.amount
+                  ? payment.amount
+                  : payment.previousAmount) || ''
+              );
+              const curr = parseFloat(optimisticAmount);
+              if (isNaN(prev) || isNaN(curr) || prev === curr) return null;
               const pct = ((curr - prev) / prev) * 100;
               const increased = pct > 0;
               return (
