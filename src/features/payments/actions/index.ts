@@ -142,3 +142,27 @@ export async function deletePaymentAction(id: string) {
 
   revalidatePath('/payments');
 }
+
+export async function updatePaymentAmountAction(id: string, amount: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const [existing] = await db
+    .select({ amount: payments.amount })
+    .from(payments)
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)));
+
+  if (!existing) throw new Error('Payment not found');
+  if (existing.amount === amount) return;
+
+  await db
+    .update(payments)
+    .set({
+      amount,
+      previousAmount: existing.amount,
+      updatedAt: new Date()
+    })
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)));
+
+  revalidatePath('/payments');
+}

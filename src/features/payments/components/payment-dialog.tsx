@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -58,20 +58,30 @@ export function PaymentDialog({ initialData, trigger }: PaymentDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const isEditing = !!initialData;
+  const amountInputRef = useRef<HTMLInputElement | null>(null);
+
+  const toFormValues = () => ({
+    name: initialData?.name || '',
+    dueDate: initialData?.dueDate
+      ? initialData.dueDate.toISOString().split('T')[0]
+      : '',
+    currency: initialData?.currency || 'SGD',
+    amount: initialData?.amount || '',
+    tag: initialData?.tag || '',
+    frequency: initialData?.frequency || '30'
+  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: initialData?.name || '',
-      dueDate: initialData?.dueDate
-        ? initialData.dueDate.toISOString().split('T')[0]
-        : '',
-      currency: initialData?.currency || 'SGD',
-      amount: initialData?.amount || '',
-      tag: initialData?.tag || '',
-      frequency: initialData?.frequency || '30'
-    }
+    defaultValues: toFormValues()
   });
+
+  // The dialog stays mounted between openings, so re-sync with the latest
+  // server data (and drop any abandoned edits) each time it is reopened.
+  useEffect(() => {
+    if (open && isEditing) form.reset(toFormValues());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
@@ -109,7 +119,17 @@ export function PaymentDialog({ initialData, trigger }: PaymentDialogProps) {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className='sm:max-w-[425px]'>
+      <DialogContent
+        className='sm:max-w-[425px]'
+        onOpenAutoFocus={(event) => {
+          // Amount is the field that changes most often when editing, so put
+          // the cursor there (with the value selected) instead of on Name.
+          if (!isEditing) return;
+          event.preventDefault();
+          amountInputRef.current?.focus();
+          amountInputRef.current?.select();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {isEditing ? 'Edit Recurring Payment' : 'Add New Recurring Payment'}
@@ -146,6 +166,10 @@ export function PaymentDialog({ initialData, trigger }: PaymentDialogProps) {
                       step='0.01'
                       placeholder='0.00'
                       {...field}
+                      ref={(element) => {
+                        field.ref(element);
+                        amountInputRef.current = element;
+                      }}
                     />
                   </FormControl>
                   <FormMessage />
