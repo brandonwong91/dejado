@@ -46,6 +46,19 @@ interface PaymentCardProps {
   };
 }
 
+// Cash-register style entry: every digit typed shifts in from the right with
+// two implied decimal places, so typing 1 2 3 4 shows 0.01 → 0.12 → 1.23 → 12.34.
+function digitsToAmount(value: string): string {
+  const digits = value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 12);
+  const cents = digits.padStart(3, '0');
+  return `${cents.slice(0, -2)}.${cents.slice(-2)}`;
+}
+
+function toFixedAmount(value: string): string {
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? '0.00' : parsed.toFixed(2);
+}
+
 export function PaymentCard({ payment }: PaymentCardProps) {
   const isPaid = payment.isPaid === 'true';
   const today = new Date();
@@ -55,7 +68,9 @@ export function PaymentCard({ payment }: PaymentCardProps) {
   const [isSavingAmount, startAmountTransition] = useTransition();
   const [optimisticAmount, setOptimisticAmount] = useOptimistic(payment.amount);
   const [editingAmount, setEditingAmount] = useState(false);
-  const [amountDraft, setAmountDraft] = useState(payment.amount);
+  const [amountDraft, setAmountDraft] = useState(() =>
+    toFixedAmount(payment.amount)
+  );
   const amountInputRef = useRef<HTMLInputElement>(null);
   // Guards against a second commit when Enter (or Escape) unmounts the input
   // and the browser fires a trailing blur.
@@ -69,14 +84,14 @@ export function PaymentCard({ payment }: PaymentCardProps) {
   }, [editingAmount]);
 
   function startEditingAmount() {
-    setAmountDraft(payment.amount);
+    setAmountDraft(toFixedAmount(payment.amount));
     skipCommitRef.current = false;
     setEditingAmount(true);
   }
 
   function cancelEditingAmount() {
     skipCommitRef.current = true;
-    setAmountDraft(payment.amount);
+    setAmountDraft(toFixedAmount(payment.amount));
     setEditingAmount(false);
   }
 
@@ -245,12 +260,12 @@ export function PaymentCard({ payment }: PaymentCardProps) {
               <div className='flex items-center justify-end gap-1'>
                 <input
                   ref={amountInputRef}
-                  type='number'
-                  step='0.01'
-                  min='0'
-                  inputMode='decimal'
+                  type='text'
+                  inputMode='numeric'
                   value={amountDraft}
-                  onChange={(event) => setAmountDraft(event.target.value)}
+                  onChange={(event) =>
+                    setAmountDraft(digitsToAmount(event.target.value))
+                  }
                   onBlur={commitAmount}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
