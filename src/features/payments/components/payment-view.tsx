@@ -126,6 +126,7 @@ function CurrencyTotal({
 }
 
 import { PaymentCalendar } from './payment-calendar';
+import { PartialSumFab } from './partial-sum-fab';
 
 export function PaymentView({ payments }: PaymentViewProps) {
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
@@ -199,6 +200,7 @@ export function PaymentView({ payments }: PaymentViewProps) {
 
   return (
     <div className='space-y-8 pb-10'>
+      <PartialSumFab payments={payments} />
       <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
         <div>
           <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
